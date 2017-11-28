@@ -14,6 +14,7 @@
 package irgen
 
 import (
+	"fmt"
 	"llvm.org/llgo/third_party/gotools/go/ssa"
 	"llvm.org/llgo/third_party/gotools/go/types"
 	"llvm.org/llvm/bindings/go/llvm"
@@ -25,6 +26,8 @@ func (fr *frame) makeChan(chantyp types.Type, size *govalue) *govalue {
 	dyntyp := fr.types.ToRuntime(chantyp)
 	size = fr.convert(size, types.Typ[types.Uintptr])
 	ch := fr.runtime.newChannel.call(fr, dyntyp, size.value)[0]
+	// TODO(growly): Am I doing it right?
+	fmt.Println("arya: emitting ssa for make chan of type", dyntyp, "size", size)
 	return newValue(ch, chantyp)
 }
 
