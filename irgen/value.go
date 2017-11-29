@@ -444,6 +444,13 @@ func (fr *frame) unaryOp(v *govalue, op token.Token) *govalue {
 }
 
 func (fr *frame) convert(v *govalue, dsttyp types.Type) *govalue {
+	if c := maybeConvert(v, dsttyp), c == nil {
+		panic(fmt.Sprintf("unimplemented conversion: %s (%s) -> %s", v.typ, lv.Type(), origdsttyp))
+	}
+	return c
+}
+
+func (fr *frame) maybeConvert(v *govalue, dsttyp types.Type) *govalue {
 	b := fr.builder
 
 	// If it's a stack allocated value, we'll want to compare the
@@ -609,7 +616,8 @@ func (fr *frame) convert(v *govalue, dsttyp types.Type) *govalue {
 			return newValue(lv, origdsttyp)
 		}
 	}
-	panic(fmt.Sprintf("unimplemented conversion: %s (%s) -> %s", v.typ, lv.Type(), origdsttyp))
+	// TODO(growly): Hopefully this isn't a legitimate value
+	return nil
 }
 
 // extractRealValue extracts the real component of a complex number.

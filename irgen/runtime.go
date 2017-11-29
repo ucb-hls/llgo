@@ -25,13 +25,14 @@ import (
 type runtimeFnInfo struct {
 	fi *functionTypeInfo
 	fn llvm.Value
+	skipNest bool
 }
 
 func (rfi *runtimeFnInfo) init(tm *llvmTypeMap, m llvm.Module, name string, args []types.Type, results []types.Type) {
 	// TODO(growly): Remove this.
 	fmt.Println("arya: initing runtimeFnInfo with name", name)
 	rfi.fi = new(functionTypeInfo)
-	*rfi.fi = tm.getFunctionTypeInfo(args, results)
+	*rfi.fi = tm.getFunctionTypeInfoOptionalNest(args, results, rfi.skipNest)
 	rfi.fn = rfi.fi.declare(m, name)
 }
 
@@ -95,6 +96,7 @@ type runtimeInterface struct {
 	mapLen,
 	New,
 	newChannel,
+	newChannelFifo,
 	newMap,
 	newSelect,
 	panic,
@@ -120,6 +122,7 @@ type runtimeInterface struct {
 	selectsend,
 	selectgo,
 	sendBig,
+	sendBigFifo,
 	setDeferRetaddr,
 	strcmp,
 	stringiter2,
@@ -328,16 +331,22 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			attrs: []llvm.Attribute{NoUnwindAttr},
 		},
 		{
+			name: "__go_new_channel",
+			rfi:  &ri.newChannel,
+			args: []types.Type{UnsafePointer, Uintptr},
+			res:  []types.Type{UnsafePointer},
+		},
+		{
 			// TODO(growly): Uhm...
 			//name: "__go_new_channel",
 			name: "fifo_malloc",
-			rfi:  &ri.newChannel,
+			rfi:  &ri.newChannelFifo,
 			// The first argument should be the width of the FIFO
-			// channel, the second remains the depth. It looks like
-			// an 'UnsafePointer' is expressed as a Uint8* because
-			// it doesn't matter what the pointer points to, as
-			// long as the pointer itself is the right size (i.e.
-			// it's a void*).
+			// channel (in number of bits), the second remains the
+			// depth. It looks like an 'UnsafePointer' is expressed
+			// as a Uint8* because it doesn't matter what the
+			// pointer points to, as long as the pointer itself is
+			// the right size (i.e. it's a void*).
 			args: []types.Type{Uint8, Uintptr},
 			// This needs to be interpreted as a FIFO* in the generated C.
 			res:  []types.Type{UnsafePointer},
@@ -473,9 +482,14 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer, Int32},
 		},
 		{
+			name: "__go_send_big",
+			rfi:  &ri.sendBig,
+			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
+		},
+		{
 			name: "fifo_write",
 			// name: "__go_send_big"
-			rfi:  &ri.sendBig,
+			rfi:  &ri.sendBigFifo,
 			// void fifo_write(FIFO *fifo, long long data)
 			// So if we expect a pointer to data, we have to dereference it here?
 			// The __go_send_big in third_party/gofrontend/libgo/runtime/chan.goc is

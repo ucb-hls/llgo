@@ -27,9 +27,17 @@ func (fr *frame) makeChan(chantyp types.Type, size *govalue) *govalue {
 	// TypeMap.ToRuntime casts this to an Unsafe Pointer? i8*
 	size = fr.convert(size, types.Typ[types.Uintptr])
 	fifoWidth := llvm.ConstInt(llvm.Int8Type(), uint64(fr.types.llvmTypeMap.Sizeof(chantyp)), false)
-	ch := fr.runtime.newChannel.call(fr, fifoWidth, size.value)[0]
+	ch := fr.runtime.newChannelFifo.call(fr, fifoWidth, size.value)[0]
 	// TODO(growly): Am I doing it right?
 	fmt.Println("arya: emitting ssa for make chan of chantyp", chantyp , "width", fifoWidth, "size", size)
+	return newValue(ch, chantyp)
+}
+
+func (fr *frame) makeChanInternal(chantyp types.Type, size *govalue) *govalue {
+	// TODO(pcc): call __go_new_channel_big here if needed
+	dyntyp := fr.types.ToRuntime(chantyp)
+	size = fr.convert(size, types.Typ[types.Uintptr])
+	ch := fr.runtime.newChannel.call(fr, dyntyp, size.value)[0]
 	return newValue(ch, chantyp)
 }
 
@@ -44,7 +52,17 @@ func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	// fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
 	// TODO(growly): We need to deref elemptr... and convert it to a
 	// Uint64, which is what the fifo interface takes.
-	fr.runtime.sendBig.call(fr, ch.value, elemptr)
+	fr.runtime.sendBigFifo.call(fr, ch.value, elemptr)
+}
+
+func (fr *frame) chanSendInternal(ch *govalue, elem *govalue) {
+	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
+	elem = fr.convert(elem, elemtyp)
+	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
+	fr.builder.CreateStore(elem.value, elemptr)
+	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
+	chantyp := fr.types.ToRuntime(ch.Type())
+	fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
 }
 
 
@@ -76,6 +94,10 @@ func (fr *frame) chanRecvFifo(ch *govalue, commaOk bool) (x, ok *govalue) {
 }
 
 // Use the golib channel implementation.
+// TODO(growly): If this is to co-exist with the LegUp FIFO channels, all of
+// the standard internal channel functions should remain included. And we need
+// a trivial test for whether conversion can work, instead of panicking in the
+// conversion.
 func (fr *frame) chanRecvInternal(ch *govalue, commaOk bool) (x, ok *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 
