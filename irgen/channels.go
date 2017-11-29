@@ -85,7 +85,7 @@ func (fr *frame) chanRecv(ch *govalue, commaOk bool) (x, ok *govalue) {
 func (fr *frame) chanRecvLegup(ch *govalue, commaOk bool) (x, ok *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 	ptr := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(elemtyp), "")
-	ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
+	//ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
 	chantyp := fr.types.ToRuntime(ch.Type())
 
 	if commaOk {
