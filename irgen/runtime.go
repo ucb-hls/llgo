@@ -69,6 +69,7 @@ type runtimeInterface struct {
 	chanCap,
 	chanLen,
 	chanrecv2,
+	chanrecv2Legup,
 	checkDefer,
 	checkInterfaceType,
 	builtinClose,
@@ -109,6 +110,7 @@ type runtimeInterface struct {
 	printString,
 	printUint64,
 	receive,
+	receiveLegup,
 	recover,
 	registerGcRoots,
 	runtimeError,
@@ -117,6 +119,7 @@ type runtimeInterface struct {
 	selectsend,
 	selectgo,
 	sendBig,
+	sendBigLegup,
 	setDeferRetaddr,
 	strcmp,
 	stringiter2,
@@ -200,6 +203,13 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
 			res:  []types.Type{Bool},
 		},
+		{
+			name: "fifo_read",
+			rfi:  &ri.chanrecv2Legup,
+			args: []types.Type{UnsafePointer},
+			res:  []types.Type{Bool},
+		},
+
 		{
 			name: "__go_check_defer",
 			rfi:  &ri.checkDefer,
@@ -331,7 +341,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 		{
 			//name: "__go_new_channel",
 			name: "fifo_malloc",
-			rfi:  &ri.newLegUpChannel,
+			rfi:  &ri.newChannelLegup,
 			args: []types.Type{Int, Int},
 			res:  []types.Type{UnsafePointer},
 		},
@@ -418,6 +428,12 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
 		},
 		{
+			name: "fifo_read",
+			rfi:  &ri.receiveLegup,
+			args: []types.Type{UnsafePointer},
+		},
+
+		{
 			name: "__go_recover",
 			rfi:  &ri.recover,
 			res:  []types.Type{EmptyInterface},
@@ -459,6 +475,13 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			rfi:  &ri.sendBig,
 			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
 		},
+		{
+			name: "fifo_write",
+			rfi:  &ri.sendBigLegup,
+			args: []types.Type{UnsafePointer, UnsafePointer},
+			res: []types.Type{UnsafePointer},
+		},
+
 		{
 			name: "__go_set_defer_retaddr",
 			rfi:  &ri.setDeferRetaddr,

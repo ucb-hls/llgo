@@ -37,7 +37,7 @@ func (fr *frame) makeChanLegup(chantyp types.Type, size *govalue) *govalue {
 
 	size = fr.convert(size, types.Typ[types.Uintptr])
 	fmt.Printf("%#v %#v\n", size, size.value)
-	ch := fr.runtime.newChannelLegup.call(fr, 0 , 0)[0]
+	ch := fr.runtime.newChannelLegup.call(fr, llvm.ConstInt(llvm.Int32Type(), 1010, false) , llvm.ConstInt(llvm.Int32Type(), 30, false) )[0]
 	return newValue(ch, chantyp)
 	//return newValue(llvm.ConstNull(chantyp), chantyp)
 }
@@ -53,14 +53,16 @@ func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
 }
 
-func (fr *frame) chanSend(ch *govalue, elem *govalue) {
+func (fr *frame) chanSendLegUp(ch *govalue, elem *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 	elem = fr.convert(elem, elemtyp)
 	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
 	fr.builder.CreateStore(elem.value, elemptr)
 	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
 	chantyp := fr.types.ToRuntime(ch.Type())
-	fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
+
+	// ch.value vs elem 
+	fr.runtime.sendBigLegup.call(fr, chantyp, ch.value)
 }
 
 // chanRecv implements x[, ok] = <-ch
@@ -75,6 +77,22 @@ func (fr *frame) chanRecv(ch *govalue, commaOk bool) (x, ok *govalue) {
 		ok = newValue(okval, types.Typ[types.Bool])
 	} else {
 		fr.runtime.receive.call(fr, chantyp, ch.value, ptri8)
+	}
+	x = newValue(fr.builder.CreateLoad(ptr, ""), elemtyp)
+	return
+}
+
+func (fr *frame) chanRecvLegup(ch *govalue, commaOk bool) (x, ok *govalue) {
+	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
+	ptr := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(elemtyp), "")
+	ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
+	chantyp := fr.types.ToRuntime(ch.Type())
+
+	if commaOk {
+		okval := fr.runtime.chanrecv2Legup.call(fr, chantyp)[0]
+		ok = newValue(okval, types.Typ[types.Bool])
+	} else {
+					fr.runtime.receiveLegup.call(fr, chantyp)
 	}
 	x = newValue(fr.builder.CreateLoad(ptr, ""), elemtyp)
 	return
