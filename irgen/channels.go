@@ -14,6 +14,7 @@
 package irgen
 
 import (
+	"fmt"
 	"llvm.org/llgo/third_party/gotools/go/ssa"
 	"llvm.org/llgo/third_party/gotools/go/types"
 	"llvm.org/llvm/bindings/go/llvm"
@@ -27,8 +28,31 @@ func (fr *frame) makeChan(chantyp types.Type, size *govalue) *govalue {
 	ch := fr.runtime.newChannel.call(fr, dyntyp, size.value)[0]
 	return newValue(ch, chantyp)
 }
+// makeChan implements make(chantype[, size])
+func (fr *frame) makeChanLegup(chantyp types.Type, size *govalue) *govalue {
+	// TODO(pcc): call __go_new_channel_big here if needed
+	print("makeChan\n")
+	dyntyp := fr.types.ToRuntime(chantyp)
+	fmt.Printf("%#v \n", dyntyp)
+
+	size = fr.convert(size, types.Typ[types.Uintptr])
+	fmt.Printf("%#v %#v\n", size, size.value)
+	ch := fr.runtime.newChannelLegup.call(fr, 0 , 0)[0]
+	return newValue(ch, chantyp)
+	//return newValue(llvm.ConstNull(chantyp), chantyp)
+}
 
 // chanSend implements ch<- x
+func (fr *frame) chanSend(ch *govalue, elem *govalue) {
+	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
+	elem = fr.convert(elem, elemtyp)
+	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
+	fr.builder.CreateStore(elem.value, elemptr)
+	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
+	chantyp := fr.types.ToRuntime(ch.Type())
+	fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
+}
+
 func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 	elem = fr.convert(elem, elemtyp)

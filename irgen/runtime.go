@@ -92,6 +92,7 @@ type runtimeInterface struct {
 	mapLen,
 	New,
 	newChannel,
+	newChannelLegup,
 	newMap,
 	newSelect,
 	panic,
@@ -327,6 +328,14 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{UnsafePointer, Uintptr},
 			res:  []types.Type{UnsafePointer},
 		},
+		{
+			//name: "__go_new_channel",
+			name: "fifo_malloc",
+			rfi:  &ri.newLegUpChannel,
+			args: []types.Type{Int, Int},
+			res:  []types.Type{UnsafePointer},
+		},
+
 		{
 			name: "__go_new_map",
 			rfi:  &ri.newMap,
