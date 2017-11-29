@@ -52,8 +52,8 @@ func (fr *frame) chanRecvFifo(ch *govalue, commaOk bool) (x, ok *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 
 	ptr := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(elemtyp), "")
-	ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
-	chantyp := fr.types.ToRuntime(ch.Type())
+	// ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
+	// chantyp := fr.types.ToRuntime(ch.Type())
 
 	if commaOk {
 		// okval := fr.runtime.chanrecv2.call(fr, chantyp, ch.value, ptri8)[0]
@@ -67,7 +67,7 @@ func (fr *frame) chanRecvFifo(ch *govalue, commaOk bool) (x, ok *govalue) {
 		// Store to load again?! What are you up to?
 		//fr.builder.CreateStore(recvval, ptr)
 
-		recvval := newValue(fr.runtime.receive.call(fr, ch.value)[0], types.Typ[types.Int64])
+		recvval := newValue(fr.runtime.receiveFifo.call(fr, ch.value)[0], types.Typ[types.Int64])
 		x = fr.convert(recvval, elemtyp)
 		fr.builder.CreateStore(x.value, ptr)
 	}
