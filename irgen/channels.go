@@ -23,7 +23,9 @@ import (
 // makeChan implements make(chantype[, size])
 func (fr *frame) makeChan(chantyp types.Type, size *govalue) *govalue {
 	// TODO(pcc): call __go_new_channel_big here if needed
-	dyntyp := fr.types.ToRuntime(chantyp)
+	// NOTE(growly): What is all channels are Uint64 now?
+	//dyntyp := fr.types.ToRuntime(chantyp)
+	dyntyp := fr.types.ToRuntime
 	size = fr.convert(size, types.Typ[types.Uintptr])
 	ch := fr.runtime.newChannel.call(fr, dyntyp, size.value)[0]
 	// TODO(growly): Am I doing it right?
@@ -38,8 +40,11 @@ func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
 	fr.builder.CreateStore(elem.value, elemptr)
 	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
-	chantyp := fr.types.ToRuntime(ch.Type())
-	fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
+	//chantyp := fr.types.ToRuntime(ch.Type())
+	// fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
+	// TODO(growly): We need to deref elemptr... and convert it to a
+	// Uint64, which is what the fifo interface takes.
+	fr.runtime.sendBig.call(fr, ch.value, elemptr)
 }
 
 // chanRecv implements x[, ok] = <-ch
@@ -53,7 +58,9 @@ func (fr *frame) chanRecv(ch *govalue, commaOk bool) (x, ok *govalue) {
 		okval := fr.runtime.chanrecv2.call(fr, chantyp, ch.value, ptri8)[0]
 		ok = newValue(okval, types.Typ[types.Bool])
 	} else {
-		fr.runtime.receive.call(fr, chantyp, ch.value, ptri8)
+		// TODO(growly): 'ch' is a handle to the channel itself, look in ch.value.
+		recvval := fr.runtime.receive.call(fr, ch.value)[0]
+		fr.builder.CreateStore(recvval, ptri8)
 	}
 	x = newValue(fr.builder.CreateLoad(ptr, ""), elemtyp)
 	return

@@ -138,6 +138,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 	Float64 := types.Typ[types.Float64]
 	Int32 := types.Typ[types.Int32]
 	Int64 := types.Typ[types.Int64]
+	Uint64 := types.Typ[types.Uint64]
 	Int := types.Typ[types.Int]
 	Rune := types.Typ[types.Rune]
 	String := types.Typ[types.String]
@@ -426,7 +427,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			// when generating the IR.
 			// 	void __go_receive(ChanType*, Hchan*, byte*);
 			//args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
-			args: []types.Type{UnsafePointer}
+			args: []types.Type{UnsafePointer},
 			res:  []types.Type{Uint64},
 		},
 		{

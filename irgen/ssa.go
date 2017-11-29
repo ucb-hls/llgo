@@ -1067,6 +1067,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 			}
 		}
 
+	// TODO(growly): Hmmmm.
 	case *ssa.MakeChan:
 		fr.env[instr] = fr.makeChan(instr.Type(), fr.value(instr.Size))
 
