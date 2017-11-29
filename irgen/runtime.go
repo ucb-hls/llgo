@@ -28,11 +28,11 @@ type runtimeFnInfo struct {
 	skipNest bool
 }
 
-func (rfi *runtimeFnInfo) init(tm *llvmTypeMap, m llvm.Module, name string, args []types.Type, results []types.Type) {
+func (rfi *runtimeFnInfo) init(tm *llvmTypeMap, m llvm.Module, name string, args []types.Type, results []types.Type, skipNest bool) {
 	// TODO(growly): Remove this.
 	fmt.Println("arya: initing runtimeFnInfo with name", name)
 	rfi.fi = new(functionTypeInfo)
-	*rfi.fi = tm.getFunctionTypeInfoOptionalNest(args, results, rfi.skipNest)
+	*rfi.fi = tm.getFunctionTypeInfoOptionalNest(args, results, skipNest)
 	rfi.fn = rfi.fi.declare(m, name)
 }
 
@@ -164,6 +164,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 		rfi       *runtimeFnInfo
 		args, res []types.Type
 		attrs     []llvm.Attribute
+		skipNest  bool
 	}{
 		{
 			name: "__go_append",
@@ -350,6 +351,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{Uint8, Uintptr},
 			// This needs to be interpreted as a FIFO* in the generated C.
 			res:  []types.Type{UnsafePointer},
+			skipNest: true,
 		},
 		{
 			name: "__go_new_map",
@@ -443,6 +445,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			rfi:  &ri.receiveFifo,
 			args: []types.Type{UnsafePointer},
 			res:  []types.Type{Uint64},
+			skipNest: true,
 		},
 		{
 			name: "__go_recover",
@@ -498,6 +501,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			// Can we just ignore the ChanType pointer?
 			// args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
 			args: []types.Type{UnsafePointer, Uint64},
+			skipNest: true,
 		},
 		{
 			name: "__go_set_defer_retaddr",
@@ -554,7 +558,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{UnsafePointer},
 		},
 	} {
-		rt.rfi.init(tm, module, rt.name, rt.args, rt.res)
+		rt.rfi.init(tm, module, rt.name, rt.args, rt.res, rt.skipNest)
 		for _, attr := range rt.attrs {
 			rt.rfi.fn.AddFunctionAttr(attr)
 		}

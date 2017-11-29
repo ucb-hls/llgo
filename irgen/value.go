@@ -444,7 +444,7 @@ func (fr *frame) unaryOp(v *govalue, op token.Token) *govalue {
 }
 
 func (fr *frame) convert(v *govalue, dsttyp types.Type) *govalue {
-	if c := maybeConvert(v, dsttyp), c == nil {
+	if c := fr.maybeConvert(v, dsttyp); c == nil {
 		panic(fmt.Sprintf("unimplemented conversion: %s (%s) -> %s", v.typ, lv.Type(), origdsttyp))
 	}
 	return c
