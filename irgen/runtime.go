@@ -111,6 +111,7 @@ type runtimeInterface struct {
 	printString,
 	printUint64,
 	receive,
+	receiveFifo,
 	recover,
 	registerGcRoots,
 	runtimeError,
@@ -138,6 +139,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 	Float64 := types.Typ[types.Float64]
 	Int32 := types.Typ[types.Int32]
 	Int64 := types.Typ[types.Int64]
+	Uint8 := types.Typ[types.Uint8]
 	Uint64 := types.Typ[types.Uint64]
 	Int := types.Typ[types.Int]
 	Rune := types.Typ[types.Rune]
@@ -336,7 +338,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			// it doesn't matter what the pointer points to, as
 			// long as the pointer itself is the right size (i.e.
 			// it's a void*).
-			args: []types.Type{UnsafePointer, Uintptr},
+			args: []types.Type{Uint8, Uintptr},
 			// This needs to be interpreted as a FIFO* in the generated C.
 			res:  []types.Type{UnsafePointer},
 		},
@@ -417,8 +419,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{Int64},
 		},
 		{
-			name: "fifo_read",
-			// name: "__go_receive",
+			name: "__go_receive",
 			rfi:  &ri.receive,
 			// TODO(growly): fifo_read returns the data as a long
 			// long; but __go_receive will write it to the address
@@ -426,7 +427,11 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			// We have to store the result in the given address
 			// when generating the IR.
 			// 	void __go_receive(ChanType*, Hchan*, byte*);
-			//args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
+			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
+		},
+		{
+			name: "fifo_read",
+			rfi:  &ri.receiveFifo,
 			args: []types.Type{UnsafePointer},
 			res:  []types.Type{Uint64},
 		},
