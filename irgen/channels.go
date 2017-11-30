@@ -21,7 +21,7 @@ import (
 )
 
 // makeChan implements make(chantype[, size])
-func (fr *frame) makeChanLegup(chantyp types.Type, size *govalue) *govalue {
+func (fr *frame) makeChan(chantyp types.Type, size *govalue) *govalue {
 	// TODO(pcc): call __go_new_channel_big here if needed
 	// NOTE(growly): What is all channels are Uint64 now?
 	// TypeMap.ToRuntime casts this to an Unsafe Pointer? i8*
@@ -31,7 +31,6 @@ func (fr *frame) makeChanLegup(chantyp types.Type, size *govalue) *govalue {
 	// TODO(growly): Am I doing it right?
 	fmt.Println("arya: emitting ssa for make chan of chantyp", chantyp , "width", fifoWidth, "size", size)
 	return newValue(ch, chantyp)
-	//return newValue(llvm.ConstNull(chantyp), chantyp)
 }
 
 func (fr *frame) makeChanInternal(chantyp types.Type, size *govalue) *govalue {
@@ -42,7 +41,8 @@ func (fr *frame) makeChanInternal(chantyp types.Type, size *govalue) *govalue {
 	return newValue(ch, chantyp)
 }
 
-func (fr *frame) chanSendLegUp(ch *govalue, elem *govalue) {
+// chanSend implements ch<- x
+func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 	elem = fr.convert(elem, elemtyp)
 	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
