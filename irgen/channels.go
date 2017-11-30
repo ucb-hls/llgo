@@ -23,23 +23,22 @@ import (
 // makeChan implements make(chantype[, size])
 func (fr *frame) makeChan(chantyp types.Type, size *govalue) *govalue {
 	// TODO(pcc): call __go_new_channel_big here if needed
+	// NOTE(growly): What is all channels are Uint64 now?
+	// TypeMap.ToRuntime casts this to an Unsafe Pointer? i8*
+	size = fr.convert(size, types.Typ[types.Uintptr])
+	fifoWidth := llvm.ConstInt(llvm.Int8Type(), uint64(fr.types.llvmTypeMap.Sizeof(chantyp)), false)
+	ch := fr.runtime.newChannelFifo.call(fr, fifoWidth, size.value)[0]
+	// TODO(growly): Am I doing it right?
+	fmt.Println("arya: emitting ssa for make chan of chantyp", chantyp , "width", fifoWidth, "size", size)
+	return newValue(ch, chantyp)
+}
+
+func (fr *frame) makeChanInternal(chantyp types.Type, size *govalue) *govalue {
+	// TODO(pcc): call __go_new_channel_big here if needed
 	dyntyp := fr.types.ToRuntime(chantyp)
 	size = fr.convert(size, types.Typ[types.Uintptr])
 	ch := fr.runtime.newChannel.call(fr, dyntyp, size.value)[0]
 	return newValue(ch, chantyp)
-}
-// makeChan implements make(chantype[, size])
-func (fr *frame) makeChanLegup(chantyp types.Type, size *govalue) *govalue {
-	// TODO(pcc): call __go_new_channel_big here if needed
-	print("makeChan\n")
-	dyntyp := fr.types.ToRuntime(chantyp)
-	fmt.Printf("%#v \n", dyntyp)
-
-	size = fr.convert(size, types.Typ[types.Uintptr])
-	fmt.Printf("%#v %#v\n", size, size.value)
-	ch := fr.runtime.newChannelLegup.call(fr, llvm.ConstInt(llvm.Int32Type(), 1010, false) , llvm.ConstInt(llvm.Int32Type(), 30, false) )[0]
-	return newValue(ch, chantyp)
-	//return newValue(llvm.ConstNull(chantyp), chantyp)
 }
 
 // chanSend implements ch<- x
@@ -49,25 +48,59 @@ func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
 	fr.builder.CreateStore(elem.value, elemptr)
 	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
-	chantyp := fr.types.ToRuntime(ch.Type())
-	fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
+	//chantyp := fr.types.ToRuntime(ch.Type())
+	// fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
+	// TODO(growly): We need to deref elemptr... and convert it to a
+	// Uint64, which is what the fifo interface takes.
+	fr.runtime.sendBigFifo.call(fr, ch.value, elemptr)
 }
 
-func (fr *frame) chanSendLegUp(ch *govalue, elem *govalue) {
+func (fr *frame) chanSendInternal(ch *govalue, elem *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 	elem = fr.convert(elem, elemtyp)
 	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
 	fr.builder.CreateStore(elem.value, elemptr)
 	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
 	chantyp := fr.types.ToRuntime(ch.Type())
-
-	// ch.value vs elem 
-	fr.runtime.sendBigLegup.call(fr, chantyp, ch.value)
+	fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
 }
 
-// chanRecv implements x[, ok] = <-ch
-func (fr *frame) chanRecv(ch *govalue, commaOk bool) (x, ok *govalue) {
+
+func (fr *frame) chanRecvFifo(ch *govalue, commaOk bool) (x, ok *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
+
+	ptr := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(elemtyp), "")
+	// ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
+	// chantyp := fr.types.ToRuntime(ch.Type())
+
+	if commaOk {
+		// okval := fr.runtime.chanrecv2.call(fr, chantyp, ch.value, ptri8)[0]
+		// ok = newValue(okval, types.Typ[types.Bool])
+		panic("chanRecvFifo can't support the comma'd form of channel receive yet")
+	} else {
+		// TODO(growly): 'ch' is a handle to the channel itself, look in ch.value. FIFOs always return a 'long long'.
+		//recvval := fr.runtime.receive.call(fr, ch.value)[0]
+		//recvval = fr.builder.CreateBitCast(recvval, fr.types.ToLLVM(elemtyp), "")
+		//fmt.Println("recvval is", recvval)
+		// Store to load again?! What are you up to?
+		//fr.builder.CreateStore(recvval, ptr)
+
+		recvval := newValue(fr.runtime.receiveFifo.call(fr, ch.value)[0], types.Typ[types.Int64])
+		x = fr.convert(recvval, elemtyp)
+		fr.builder.CreateStore(x.value, ptr)
+	}
+	x = newValue(fr.builder.CreateLoad(ptr, ""), elemtyp)
+	return
+}
+
+// Use the golib channel implementation.
+// TODO(growly): If this is to co-exist with the LegUp FIFO channels, all of
+// the standard internal channel functions should remain included. And we need
+// a trivial test for whether conversion can work, instead of panicking in the
+// conversion.
+func (fr *frame) chanRecvInternal(ch *govalue, commaOk bool) (x, ok *govalue) {
+	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
+
 	ptr := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(elemtyp), "")
 	ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
 	chantyp := fr.types.ToRuntime(ch.Type())
@@ -82,19 +115,16 @@ func (fr *frame) chanRecv(ch *govalue, commaOk bool) (x, ok *govalue) {
 	return
 }
 
-func (fr *frame) chanRecvLegup(ch *govalue, commaOk bool) (x, ok *govalue) {
-	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
-	ptr := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(elemtyp), "")
-	//ptri8 := fr.builder.CreateBitCast(ptr, llvm.PointerType(llvm.Int8Type(), 0), "")
-	chantyp := fr.types.ToRuntime(ch.Type())
-
-	if commaOk {
-		okval := fr.runtime.chanrecv2Legup.call(fr, chantyp)[0]
-		ok = newValue(okval, types.Typ[types.Bool])
-	} else {
-					fr.runtime.receiveLegup.call(fr, chantyp)
-	}
-	x = newValue(fr.builder.CreateLoad(ptr, ""), elemtyp)
+// chanRecv implements x[, ok] = <-ch
+func (fr *frame) chanRecv(ch *govalue, commaOk bool) (x, ok *govalue) {
+	defer func() {
+		if r:= recover(); r != nil {
+			fmt.Println("Panic in chanRecv, will attempt internal method:", r)
+			x, ok = fr.chanRecvInternal(ch, commaOk)
+			return
+		}
+	}()
+	x, ok = fr.chanRecvFifo(ch, commaOk)
 	return
 }
 
