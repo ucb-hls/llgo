@@ -515,6 +515,7 @@ type functionTypeInfo struct {
 	argInfos     []argInfo
 	retInf       retInfo
 	chainIndex   int
+	skipNest     bool
 }
 
 func (fi *functionTypeInfo) declare(m llvm.Module, name string) llvm.Value {
@@ -578,6 +579,10 @@ func (fi *functionTypeInfo) invoke(ctx llvm.Context, allocaBuilder llvm.Builder,
 }
 
 func (tm *llvmTypeMap) getFunctionTypeInfo(args []types.Type, results []types.Type) (fi functionTypeInfo) {
+	return tm.getFunctionTypeInfoOptionalNest(args, results, false)
+}
+
+func (tm *llvmTypeMap) getFunctionTypeInfoOptionalNest(args []types.Type, results []types.Type, skipNest bool) (fi functionTypeInfo) {
 	var returnType llvm.Type
 	var argTypes []llvm.Type
 	var argAttrKind uint
@@ -629,11 +634,13 @@ func (tm *llvmTypeMap) getFunctionTypeInfo(args []types.Type, results []types.Ty
 		}
 	}
 
-	// Allocate an argument for the call chain.
-	fi.chainIndex = len(argTypes)
-	argTypes = append(argTypes, llvm.PointerType(tm.ctx.Int8Type(), 0))
-	argAttrKind = llvm.AttributeKindID("nest")
-	fi.argAttrs = append(fi.argAttrs, tm.ctx.CreateEnumAttribute(argAttrKind, 0))
+	if (!skipNest) {
+		// Allocate an argument for the call chain.
+		fi.chainIndex = len(argTypes)
+		argTypes = append(argTypes, llvm.PointerType(tm.ctx.Int8Type(), 0))
+		argAttrKind = llvm.AttributeKindID("nest")
+		fi.argAttrs = append(fi.argAttrs, tm.ctx.CreateEnumAttribute(argAttrKind, 0))
+	}
 
 	// Keep track of the number of INTEGER/SSE class registers remaining.
 	remainingInt := 6

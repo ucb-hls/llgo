@@ -14,6 +14,7 @@
 package irgen
 
 import (
+	"fmt"
 	"strconv"
 
 	"llvm.org/llgo/third_party/gotools/go/types"
@@ -24,11 +25,14 @@ import (
 type runtimeFnInfo struct {
 	fi *functionTypeInfo
 	fn llvm.Value
+	skipNest bool
 }
 
-func (rfi *runtimeFnInfo) init(tm *llvmTypeMap, m llvm.Module, name string, args []types.Type, results []types.Type) {
+func (rfi *runtimeFnInfo) init(tm *llvmTypeMap, m llvm.Module, name string, args []types.Type, results []types.Type, skipNest bool) {
+	// TODO(growly): Remove this.
+	fmt.Println("arya: initing runtimeFnInfo with name", name)
 	rfi.fi = new(functionTypeInfo)
-	*rfi.fi = tm.getFunctionTypeInfo(args, results)
+	*rfi.fi = tm.getFunctionTypeInfoOptionalNest(args, results, skipNest)
 	rfi.fn = rfi.fi.declare(m, name)
 }
 
@@ -69,7 +73,6 @@ type runtimeInterface struct {
 	chanCap,
 	chanLen,
 	chanrecv2,
-	chanrecv2Legup,
 	checkDefer,
 	checkInterfaceType,
 	builtinClose,
@@ -93,7 +96,7 @@ type runtimeInterface struct {
 	mapLen,
 	New,
 	newChannel,
-	newChannelLegup,
+	newChannelFifo,
 	newMap,
 	newSelect,
 	panic,
@@ -110,7 +113,7 @@ type runtimeInterface struct {
 	printString,
 	printUint64,
 	receive,
-	receiveLegup,
+	receiveFifo,
 	recover,
 	registerGcRoots,
 	runtimeError,
@@ -119,7 +122,7 @@ type runtimeInterface struct {
 	selectsend,
 	selectgo,
 	sendBig,
-	sendBigLegup,
+	sendBigFifo,
 	setDeferRetaddr,
 	strcmp,
 	stringiter2,
@@ -139,6 +142,8 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 	Float64 := types.Typ[types.Float64]
 	Int32 := types.Typ[types.Int32]
 	Int64 := types.Typ[types.Int64]
+	Uint8 := types.Typ[types.Uint8]
+	Uint64 := types.Typ[types.Uint64]
 	Int := types.Typ[types.Int]
 	Rune := types.Typ[types.Rune]
 	String := types.Typ[types.String]
@@ -159,6 +164,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 		rfi       *runtimeFnInfo
 		args, res []types.Type
 		attrs     []llvm.Attribute
+		skipNest  bool
 	}{
 		{
 			name: "__go_append",
@@ -203,13 +209,6 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
 			res:  []types.Type{Bool},
 		},
-		{
-			name: "fifo_read",
-			rfi:  &ri.chanrecv2Legup,
-			args: []types.Type{UnsafePointer},
-			res:  []types.Type{Uint64},
-		},
-
 		{
 			name: "__go_check_defer",
 			rfi:  &ri.checkDefer,
@@ -339,13 +338,21 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			res:  []types.Type{UnsafePointer},
 		},
 		{
+			// TODO(growly): Uhm...
 			//name: "__go_new_channel",
 			name: "fifo_malloc",
-			rfi:  &ri.newChannelLegup,
-			args: []types.Type{Int, Int},
+			rfi:  &ri.newChannelFifo,
+			// The first argument should be the width of the FIFO
+			// channel (in number of bits), the second remains the
+			// depth. It looks like an 'UnsafePointer' is expressed
+			// as a Uint8* because it doesn't matter what the
+			// pointer points to, as long as the pointer itself is
+			// the right size (i.e. it's a void*).
+			args: []types.Type{Uint8, Uintptr},
+			// This needs to be interpreted as a FIFO* in the generated C.
 			res:  []types.Type{UnsafePointer},
+			skipNest: true,
 		},
-
 		{
 			name: "__go_new_map",
 			rfi:  &ri.newMap,
@@ -425,15 +432,21 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 		{
 			name: "__go_receive",
 			rfi:  &ri.receive,
+			// TODO(growly): fifo_read returns the data as a long
+			// long; but __go_receive will write it to the address
+			// given in the third argument.
+			// We have to store the result in the given address
+			// when generating the IR.
+			// 	void __go_receive(ChanType*, Hchan*, byte*);
 			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
 		},
 		{
 			name: "fifo_read",
-			rfi:  &ri.receiveLegup,
+			rfi:  &ri.receiveFifo,
 			args: []types.Type{UnsafePointer},
 			res:  []types.Type{Uint64},
+			skipNest: true,
 		},
-
 		{
 			name: "__go_recover",
 			rfi:  &ri.recover,
@@ -478,11 +491,18 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 		},
 		{
 			name: "fifo_write",
-			rfi:  &ri.sendBigLegup,
+			// name: "__go_send_big"
+			rfi:  &ri.sendBigFifo,
+			// void fifo_write(FIFO *fifo, long long data)
+			// So if we expect a pointer to data, we have to dereference it here?
+			// The __go_send_big in third_party/gofrontend/libgo/runtime/chan.goc is
+			// void __go_send_big(ChanType*, Hchan*, byte*)
+			// TODO(growly):
+			// Can we just ignore the ChanType pointer?
+			// args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
 			args: []types.Type{UnsafePointer, Uint64},
-			//res: []types.Type{UnsafePointer},
+			skipNest: true,
 		},
-
 		{
 			name: "__go_set_defer_retaddr",
 			rfi:  &ri.setDeferRetaddr,
@@ -538,7 +558,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args: []types.Type{UnsafePointer},
 		},
 	} {
-		rt.rfi.init(tm, module, rt.name, rt.args, rt.res)
+		rt.rfi.init(tm, module, rt.name, rt.args, rt.res, rt.skipNest)
 		for _, attr := range rt.attrs {
 			rt.rfi.fn.AddFunctionAttr(attr)
 		}

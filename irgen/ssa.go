@@ -1067,9 +1067,10 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 			}
 		}
 
+	// TODO(growly): Hmmmm.
 	case *ssa.MakeChan:
-		//fr.env[instr] = fr.makeChan(instr.Type(), fr.value(instr.Size))
-		fr.env[instr] = fr.makeChanLegup(instr.Type(), fr.value(instr.Size))
+		fr.env[instr] = fr.makeChan(instr.Type(), fr.value(instr.Size))
+
 	case *ssa.MakeClosure:
 		llfn := fr.resolveFunctionGlobal(instr.Fn.(*ssa.Function))
 		llfn = llvm.ConstBitCast(llfn, llvm.PointerType(llvm.Int8Type(), 0))
@@ -1260,7 +1261,8 @@ func (fr *frame) callBuiltin(typ types.Type, builtin *ssa.Builtin, args []ssa.Va
 		return []*govalue{newValue(cmplx, typ)}
 
 	case "ssa:wrapnilchk":
-		ptr := fr.value(args[0]); fr.nilCheck(args[0], ptr.value)
+		ptr := fr.value(args[0])
+		fr.nilCheck(args[0], ptr.value)
 		return []*govalue{ptr}
 
 	default:
