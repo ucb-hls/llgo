@@ -1148,7 +1148,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		fr.tuples[instr] = tuple
 
 	case *ssa.Send:
-		fr.chanSend(fr.value(instr.Chan), fr.value(instr.X))
+		fr.chanSendLegUp(fr.value(instr.Chan), fr.value(instr.X))
 
 	case *ssa.Slice:
 		x := fr.llvmvalue(instr.X)
@@ -1186,7 +1186,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		operand := fr.value(instr.X)
 		switch instr.Op {
 		case token.ARROW:
-			x, ok := fr.chanRecv(operand, instr.CommaOk)
+			x, ok := fr.chanRecvLegup(operand, instr.CommaOk)
 			if instr.CommaOk {
 				fr.tuples[instr] = []*govalue{x, ok}
 			} else {

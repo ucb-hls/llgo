@@ -207,7 +207,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			name: "fifo_read",
 			rfi:  &ri.chanrecv2Legup,
 			args: []types.Type{UnsafePointer},
-			res:  []types.Type{Bool},
+			res:  []types.Type{Uint64},
 		},
 
 		{
@@ -431,6 +431,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			name: "fifo_read",
 			rfi:  &ri.receiveLegup,
 			args: []types.Type{UnsafePointer},
+			res:  []types.Type{Uint64},
 		},
 
 		{
@@ -478,8 +479,8 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 		{
 			name: "fifo_write",
 			rfi:  &ri.sendBigLegup,
-			args: []types.Type{UnsafePointer, UnsafePointer},
-			res: []types.Type{UnsafePointer},
+			args: []types.Type{UnsafePointer, Uint64},
+			//res: []types.Type{UnsafePointer},
 		},
 
 		{
