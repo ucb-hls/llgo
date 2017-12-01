@@ -118,6 +118,7 @@ type runtimeInterface struct {
 	recover,
 	registerGcRoots,
 	runtimeError,
+	pthreadExit,
 	selectdefault,
 	selectrecv2,
 	selectsend,
@@ -261,6 +262,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			name: "pthread_create",
 			rfi:  &ri.pthreadCreate,
 			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer, UnsafePointer},
+			skipNest: true,
 		},
 		{
 			name: "runtime.ifaceE2I2",
@@ -469,6 +471,13 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			args:  []types.Type{Int32},
 			attrs: []llvm.Attribute{NoReturnAttr},
 		},
+		{
+			name:  "pthread_exit",
+			rfi:   &ri.pthreadExit,
+			args:  []types.Type{UnsafePointer},
+			skipNest: true,
+		},
+
 		{
 			name: "runtime.selectdefault",
 			rfi:  &ri.selectdefault,

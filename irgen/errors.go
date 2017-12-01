@@ -64,7 +64,13 @@ func (fr *frame) condBrRuntimeError(cond llvm.Value, errcode uint64) {
 
 	if newbb {
 		fr.builder.SetInsertPointAtEnd(errorbb)
-		fr.runtime.runtimeError.call(fr, llvm.ConstInt(llvm.Int32Type(), errcode, false))
+		null_typ := llvm.PointerType(llvm.Int32Type(), 0)
+		null_ptr := fr.allocaBuilder.CreateAlloca(null_typ, "")
+		fr.builder.CreateStore(llvm.ConstNull(null_typ), null_ptr)
+		
+		fr.runtime.pthreadExit.call(fr, null_ptr)
+		//fr.runtime.runtimeError.call(fr, llvm.ConstInt(llvm.Int32Type(), errcode, false))
+		// JENNY not sure how to get rid of this use return instead? 
 		fr.builder.CreateUnreachable()
 	}
 
