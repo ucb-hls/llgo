@@ -963,7 +963,30 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 
 	case *ssa.Go:
 		fn, arg := fr.createThunk(instr)
-		fr.runtime.Go.call(fr, fn, arg)
+	  // pthread_t unsigned long -> Uint32
+	  //pthread_create(pthread_t *, const pthread_attr_t *,
+			  //void *(*)(void *), void *);
+
+		println("JENNY: pthread_create")
+		// pthread_t run;
+		p := fr.allocaBuilder.CreateAlloca(llvm.Int32Type(), "p")
+		// pthread_t* run_ptr = & run;
+		p_ptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(llvm.Int32Type(), 0), "")
+		fr.builder.CreateStore(p, p_ptr)
+
+		// pthread_attr_t attr;
+		// pthread_attr_t* attr = & attr;
+
+		// Do not need to use attributes now, and the Int32Type is not correct
+		//a := fr.allocaBuilder.CreateAlloca(llvm.Int32Type(), "a")
+		a_typ := llvm.PointerType(llvm.Int32Type(), 0)
+		a_ptr := fr.allocaBuilder.CreateAlloca(a_typ, "")
+		fr.builder.CreateStore(llvm.ConstNull(a_typ), a_ptr)
+		// void* func
+		//pthread_create(run_ptr, NULL, main_OC_main_KD_main_OC_main_EC_1, (void *)llvm_cbe_tmp__16);
+
+		//fr.runtime.Go.call(fr, fn, arg)
+		fr.runtime.pthreadCreate.call(fr, p_ptr, a_ptr, fn, arg)
 
 	case *ssa.If:
 		cond := fr.llvmvalue(instr.Cond)

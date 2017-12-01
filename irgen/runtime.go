@@ -82,6 +82,7 @@ type runtimeInterface struct {
 	deferredRecover,
 	emptyInterfaceCompare,
 	Go,
+	pthreadCreate,
 	ifaceE2I2,
 	ifaceI2I2,
 	intArrayToString,
@@ -255,6 +256,11 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			name: "__go_go",
 			rfi:  &ri.Go,
 			args: []types.Type{UnsafePointer, UnsafePointer},
+		},
+		{
+			name: "pthread_create",
+			rfi:  &ri.pthreadCreate,
+			args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer, UnsafePointer},
 		},
 		{
 			name: "runtime.ifaceE2I2",
@@ -639,7 +645,7 @@ func (fr *frame) createTypeMalloc(t types.Type) llvm.Value {
 	// Jenny we can make it a global later, not leave it as local struct
 	//size := llvm.ConstInt(fr.target.IntPtrType(), uint64(fr.llvmtypes.Sizeof(t)), false)
 
-	fmt.Println("jenny: createTypeMalloc", t)
+	fmt.Println("JENNY: createTypeMalloc", t)
 
   // allocaBuilder vs builder 
 	// Theoratically t is a pointer 
