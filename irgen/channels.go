@@ -26,7 +26,7 @@ func (fr *frame) makeChan(chantyp types.Type, size *govalue) *govalue {
 	// NOTE(growly): What is all channels are Uint64 now?
 	// TypeMap.ToRuntime casts this to an Unsafe Pointer? i8*
 	size = fr.convert(size, types.Typ[types.Uintptr])
-	fifoWidth := llvm.ConstInt(llvm.Int8Type(), uint64(fr.types.llvmTypeMap.Sizeof(chantyp)), false)
+	fifoWidth := llvm.ConstInt(llvm.Int8Type(), uint64(fr.types.llvmTypeMap.Sizeof(chantyp) * 8), false)
 	ch := fr.runtime.newChannelFifo.call(fr, fifoWidth, size.value)[0]
 	// TODO(growly): Am I doing it right?
 	fmt.Println("arya: emitting ssa for make chan of chantyp", chantyp , "width", fifoWidth, "size", size)

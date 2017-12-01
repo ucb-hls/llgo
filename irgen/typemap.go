@@ -300,6 +300,7 @@ func (tm *llvmTypeMap) toLLVM(t types.Type, name string) llvm.Type {
 	return lt
 }
 
+// JENNY introduce FIFO type here? 
 func (tm *llvmTypeMap) makeLLVMType(t types.Type, name string) llvm.Type {
 	return tm.getBackendType(t).ToLLVM(tm.ctx)
 }

@@ -632,7 +632,30 @@ func (fr *frame) createZExtOrTrunc(v llvm.Value, t llvm.Type, name string) llvm.
 	return v
 }
 
+
+// Should convert some Alloc to local struct
 func (fr *frame) createTypeMalloc(t types.Type) llvm.Value {
+	// size of malloc
+	// Jenny we can make it a global later, not leave it as local struct
+	//size := llvm.ConstInt(fr.target.IntPtrType(), uint64(fr.llvmtypes.Sizeof(t)), false)
+
+	fmt.Println("jenny: createTypeMalloc", t)
+
+  // allocaBuilder vs builder 
+	// Theoratically t is a pointer 
+	t_uly := t.Underlying()
+	v := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(t_uly), "")
+
+	v_ptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(fr.types.ToLLVM(t_uly), 0) ,"")
+	fr.builder.CreateStore(v, v_ptr)
+	//return v_ptr
+
+	return fr.builder.CreateBitCast(v_ptr, llvm.PointerType(fr.types.ToLLVM(t), 0), "")
+	//malloc := fr.runtime.New.callOnly(fr, fr.types.ToRuntime(t), size)[0]
+	//return fr.builder.CreateBitCast(malloc, llvm.PointerType(fr.types.ToLLVM(t), 0), "")
+}
+
+func (fr *frame) createTypeMallocInternal(t types.Type) llvm.Value {
 	size := llvm.ConstInt(fr.target.IntPtrType(), uint64(fr.llvmtypes.Sizeof(t)), false)
 	malloc := fr.runtime.New.callOnly(fr, fr.types.ToRuntime(t), size)[0]
 	return fr.builder.CreateBitCast(malloc, llvm.PointerType(fr.types.ToLLVM(t), 0), "")
