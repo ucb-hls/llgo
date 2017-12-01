@@ -65,7 +65,8 @@ type TypeMap struct {
 	types.MethodSetCache
 
 	commonTypeType, uncommonTypeType, ptrTypeType, funcTypeType, arrayTypeType, sliceTypeType, mapTypeType, chanTypeType, interfaceTypeType, structTypeType llvm.Type
-	mapDescType                                                                                                                                             llvm.Type
+	fifoType		llvm.Type
+	mapDescType		llvm.Type
 
 	methodType, imethodType, structFieldType llvm.Type
 
@@ -170,6 +171,10 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 	}, false)
 
 	tm.methodSliceType = tm.makeNamedSliceType("methodSlice", tm.methodType)
+
+	tm.fifoType = tm.ctx.StructCreateNamed("FIFO")
+	// TODO(growly): I don't want to do the "StructSetBody" though
+	tm.fifoType.StructSetBody([]llvm.Type{voidPtrType}, false)
 
 	tm.uncommonTypeType = tm.ctx.StructCreateNamed("uncommonType")
 	tm.uncommonTypeType.StructSetBody([]llvm.Type{
