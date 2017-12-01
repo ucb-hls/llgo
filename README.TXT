@@ -86,3 +86,6 @@ https://github.com/go-llvm/llvm
 
 tutorial:
 https://felixangell.com/blog/an-introduction-to-llvm-in-go
+
+go type interface:
+https://golang.org/doc/effective_go.html#interface_conversions
