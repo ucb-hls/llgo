@@ -257,6 +257,8 @@ func (u *unit) resolveFunctionGlobal(f *ssa.Function) llvm.Value {
 		return v
 	}
 	name := u.types.mc.mangleFunctionName(f)
+
+	//println("JENNY: resolveFunctionGlobal ", name)
 	// It's possible that the function already exists in the module;
 	// for example, if it's a runtime intrinsic that the compiler
 	// has already referenced.
@@ -725,8 +727,9 @@ func (fr *frame) isNonNull(v ssa.Value) bool {
 
 func (fr *frame) nilCheck(v ssa.Value, llptr llvm.Value) {
 	if !fr.isNonNull(v) {
-		ptrnull := fr.builder.CreateIsNull(llptr, "")
-		fr.condBrRuntimeError(ptrnull, gccgoRuntimeErrorNIL_DEREFERENCE)
+		//ptrnull := fr.builder.CreateIsNull(llptr, "")
+		//fr.condBrRuntimeError(ptrnull, gccgoRuntimeErrorNIL_DEREFERENCE)
+		println("Jenny nilCheck", v)
 	}
 }
 
@@ -1009,8 +1012,8 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		}
 		index := fr.llvmvalue(instr.Index)
 
-		arraytyp := instr.X.Type().Underlying().(*types.Array)
-		arraylen := llvm.ConstInt(fr.llvmtypes.inttype, uint64(arraytyp.Len()), false)
+		//arraytyp := instr.X.Type().Underlying().(*types.Array)
+		//arraylen := llvm.ConstInt(fr.llvmtypes.inttype, uint64(arraytyp.Len()), false)
 
 		// The index may not have been promoted to int (for example, if it
 		// came from a composite literal).
@@ -1018,12 +1021,12 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 
 		// Bounds checking: 0 <= index < len
 		zero := llvm.ConstNull(fr.types.inttype)
-		i0 := fr.builder.CreateICmp(llvm.IntSLT, index, zero, "")
-		li := fr.builder.CreateICmp(llvm.IntSLE, arraylen, index, "")
+		//i0 := fr.builder.CreateICmp(llvm.IntSLT, index, zero, "")
+		//li := fr.builder.CreateICmp(llvm.IntSLE, arraylen, index, "")
 
-		cond := fr.builder.CreateOr(i0, li, "")
+		//cond := fr.builder.CreateOr(i0, li, "")
 
-		fr.condBrRuntimeError(cond, gccgoRuntimeErrorARRAY_INDEX_OUT_OF_BOUNDS)
+		//fr.condBrRuntimeError(cond, gccgoRuntimeErrorARRAY_INDEX_OUT_OF_BOUNDS)
 
 		addr := fr.builder.CreateGEP(arrayptr, []llvm.Value{zero, index}, "")
 		if fr.canAvoidElementLoad(instr) {
@@ -1035,22 +1038,24 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 	case *ssa.IndexAddr:
 		x := fr.llvmvalue(instr.X)
 		index := fr.llvmvalue(instr.Index)
-		var arrayptr, arraylen llvm.Value
+		//var arrayptr, arraylen llvm.Value
+		var arrayptr llvm.Value
+
 		var elemtyp types.Type
-		var errcode uint64
+		//var errcode uint64
 		switch typ := instr.X.Type().Underlying().(type) {
 		case *types.Slice:
 			elemtyp = typ.Elem()
 			arrayptr = fr.builder.CreateExtractValue(x, 0, "")
-			arraylen = fr.builder.CreateExtractValue(x, 1, "")
-			errcode = gccgoRuntimeErrorSLICE_INDEX_OUT_OF_BOUNDS
+			//arraylen = fr.builder.CreateExtractValue(x, 1, "")
+			//errcode = gccgoRuntimeErrorSLICE_INDEX_OUT_OF_BOUNDS
 		case *types.Pointer: // *array
 			arraytyp := typ.Elem().Underlying().(*types.Array)
 			elemtyp = arraytyp.Elem()
 			fr.nilCheck(instr.X, x)
 			arrayptr = x
-			arraylen = llvm.ConstInt(fr.llvmtypes.inttype, uint64(arraytyp.Len()), false)
-			errcode = gccgoRuntimeErrorARRAY_INDEX_OUT_OF_BOUNDS
+			//arraylen = llvm.ConstInt(fr.llvmtypes.inttype, uint64(arraytyp.Len()), false)
+			//errcode = gccgoRuntimeErrorARRAY_INDEX_OUT_OF_BOUNDS
 		}
 
 		// The index may not have been promoted to int (for example, if it
@@ -1058,13 +1063,13 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		index = fr.createZExtOrTrunc(index, fr.types.inttype, "")
 
 		// Bounds checking: 0 <= index < len
-		zero := llvm.ConstNull(fr.types.inttype)
-		i0 := fr.builder.CreateICmp(llvm.IntSLT, index, zero, "")
-		li := fr.builder.CreateICmp(llvm.IntSLE, arraylen, index, "")
+		//zero := llvm.ConstNull(fr.types.inttype)
+		//i0 := fr.builder.CreateICmp(llvm.IntSLT, index, zero, "")
+		//li := fr.builder.CreateICmp(llvm.IntSLE, arraylen, index, "")
 
-		cond := fr.builder.CreateOr(i0, li, "")
+		//cond := fr.builder.CreateOr(i0, li, "")
 
-		fr.condBrRuntimeError(cond, errcode)
+		//fr.condBrRuntimeError(cond, errcode)
 
 		ptrtyp := llvm.PointerType(fr.llvmtypes.ToLLVM(elemtyp), 0)
 		arrayptr = fr.builder.CreateBitCast(arrayptr, ptrtyp, "")
