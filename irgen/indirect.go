@@ -72,6 +72,12 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 		arg = fr.builder.CreateBitCast(arg, i8ptr, "")
 	}
 
+	// Create a copy of current closure function 
+	//thunkfntypeCopy := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
+	//thunkfnCopy := llvm.AddFunction(fr.module.Module, "copy", thunkfntypeCopy)
+	//thunkfnCopy.SetLinkage(llvm.InternalLinkage)
+
+	//thunkfntype := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
 	thunkfntype := llvm.FunctionType(llvm.VoidType(), []llvm.Type{i8ptr}, false)
 	thunkfn := llvm.AddFunction(fr.module.Module, "", thunkfntype)
 	thunkfn.SetLinkage(llvm.InternalLinkage)
@@ -80,6 +86,7 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 	thunkfr := newFrame(fr.unit, thunkfn)
 	defer thunkfr.dispose()
 
+	// Place to modify the closure function
 	prologuebb := llvm.AddBasicBlock(thunkfn, "prologue")
 	thunkfr.builder.SetInsertPointAtEnd(prologuebb)
 
@@ -119,6 +126,8 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 		thunkfr.builder.SetInsertPointAtEnd(exitbb)
 	}
 	thunkfr.builder.CreateRetVoid()
+	//thunkfr.builder.CreateRet(llvm.ConstNull(llvm.Int8Type()))
+	
 
 	thunk = fr.builder.CreateBitCast(thunkfn, i8ptr, "")
 	return
