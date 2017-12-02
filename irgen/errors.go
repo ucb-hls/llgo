@@ -64,9 +64,10 @@ func (fr *frame) condBrRuntimeError(cond llvm.Value, errcode uint64) {
 
 	if newbb {
 		fr.builder.SetInsertPointAtEnd(errorbb)
-		null_typ := llvm.PointerType(llvm.Int32Type(), 0)
-		null_ptr := fr.allocaBuilder.CreateAlloca(null_typ, "")
-		fr.builder.CreateStore(llvm.ConstNull(null_typ), null_ptr)
+		//null_typ := llvm.Int8Type()
+		//null_ptr := fr.allocaBuilder.CreateAlloca(null_typ, "")
+		//fr.builder.CreateStore(llvm.ConstNull(null_typ), null_ptr)
+		null_ptr := llvm.ConstNull(llvm.PointerType(llvm.Int8Type(), 0))
 		
 		fr.runtime.pthreadExit.call(fr, null_ptr)
 		//fr.runtime.runtimeError.call(fr, llvm.ConstInt(llvm.Int32Type(), errcode, false))

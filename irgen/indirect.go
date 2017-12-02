@@ -76,9 +76,9 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 	//thunkfntypeCopy := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
 	//thunkfnCopy := llvm.AddFunction(fr.module.Module, "copy", thunkfntypeCopy)
 	//thunkfnCopy.SetLinkage(llvm.InternalLinkage)
-
-	//thunkfntype := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
-	thunkfntype := llvm.FunctionType(llvm.VoidType(), []llvm.Type{i8ptr}, false)
+	// JENNY this is actually like a wrapper function for closure!
+	thunkfntype := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
+	//thunkfntype := llvm.FunctionType(llvm.VoidType(), []llvm.Type{i8ptr}, false)
 	thunkfn := llvm.AddFunction(fr.module.Module, "", thunkfntype)
 	thunkfn.SetLinkage(llvm.InternalLinkage)
 	fr.addCommonFunctionAttrs(thunkfn)
@@ -125,10 +125,13 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 		thunkfr.builder.CreateBr(exitbb)
 		thunkfr.builder.SetInsertPointAtEnd(exitbb)
 	}
-	thunkfr.builder.CreateRetVoid()
-	//thunkfr.builder.CreateRet(llvm.ConstNull(llvm.Int8Type()))
+	//thunkfr.builder.CreateRetVoid()
+	//null_typ := llvm.Int8Type()
+	//null_ptr := thunkfr.allocaBuilder.CreateAlloca(null_typ, "")
+	null_ptr := llvm.ConstNull(llvm.PointerType(llvm.Int8Type(), 0))
 	
-
+	thunkfr.builder.CreateRet(null_ptr)
+	
 	thunk = fr.builder.CreateBitCast(thunkfn, i8ptr, "")
 	return
 }
