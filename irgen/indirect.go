@@ -24,6 +24,14 @@ import (
 // given function and arguments, suitable for use with
 // "defer" and "go".
 func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg llvm.Value) {
+	i8ptr := llvm.PointerType(llvm.Int8Type(), 0)
+	thunk, arg = fr.createThunkRaw(call)
+	thunk = fr.builder.CreateBitCast(thunk, i8ptr, "")
+	return
+}
+
+// Creates a thunk but doesn't cast the result to a UnsafePointer (uint8*).
+func (fr *frame) createThunkRaw(call ssa.CallInstruction) (thunk llvm.Value, arg llvm.Value) {
 	seenarg := make(map[ssa.Value]bool)
 	var args []ssa.Value
 	var argtypes []*types.Var
@@ -73,12 +81,8 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 	}
 
 	// Create a copy of current closure function 
-	//thunkfntypeCopy := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
-	//thunkfnCopy := llvm.AddFunction(fr.module.Module, "copy", thunkfntypeCopy)
-	//thunkfnCopy.SetLinkage(llvm.InternalLinkage)
 	// JENNY this is actually like a wrapper function for closure!
-	thunkfntype := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
-	//thunkfntype := llvm.FunctionType(llvm.VoidType(), []llvm.Type{i8ptr}, false)
+	thunkfntype := llvm.FunctionType(llvm.VoidType(), []llvm.Type{i8ptr}, false)
 	thunkfn := llvm.AddFunction(fr.module.Module, "", thunkfntype)
 	thunkfn.SetLinkage(llvm.InternalLinkage)
 	fr.addCommonFunctionAttrs(thunkfn)
@@ -103,7 +107,6 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 			thunkfr.env[ssaarg] = newValue(thunkarg, ssaarg.Type())
 		}
 	}
-
 	_, isDefer := call.(*ssa.Defer)
 
 	entrybb := llvm.AddBasicBlock(thunkfn, "entry")
@@ -125,13 +128,54 @@ func (fr *frame) createThunk(call ssa.CallInstruction) (thunk llvm.Value, arg ll
 		thunkfr.builder.CreateBr(exitbb)
 		thunkfr.builder.SetInsertPointAtEnd(exitbb)
 	}
-	//thunkfr.builder.CreateRetVoid()
-	//null_typ := llvm.Int8Type()
-	//null_ptr := thunkfr.allocaBuilder.CreateAlloca(null_typ, "")
-	null_ptr := llvm.ConstNull(llvm.PointerType(llvm.Int8Type(), 0))
-	
-	thunkfr.builder.CreateRet(null_ptr)
-	
-	thunk = fr.builder.CreateBitCast(thunkfn, i8ptr, "")
+	thunkfr.builder.CreateRetVoid()
+	thunk = thunkfn
 	return
+}
+
+// We need a wrapper function for pthread_create: it expectes a
+// void *(*f)(void*), i.e. it has to invoke a function that returns a value.
+// We create that function and always include a terminating pthread_exit to
+// make the return value. That wrapper function, created here, is responsible
+// for invoking the actual function we want to call.
+func (fr *frame) createPthreadWrapper(innerfn llvm.Value) llvm.Value {
+	i8ptr := llvm.PointerType(llvm.Int8Type(), 0)
+	fntype := llvm.FunctionType(llvm.PointerType(llvm.Int8Type(), 0), []llvm.Type{i8ptr}, false)
+	fn := llvm.AddFunction(fr.module.Module, "auto_pthread_wrapper", fntype)
+	fn.SetLinkage(llvm.InternalLinkage)
+	fr.addCommonFunctionAttrs(fn)
+
+	// TODO(growly): dumb question: do we need a new frame?
+	wrapfr := newFrame(fr.unit, fn)
+	defer wrapfr.dispose()
+
+	// TODO(growly): we don't need to unpack the void* arg
+	//prologuebb := llvm.AddBasicBlock(fn, "prologue")
+	//wrapfr.builder.SetInsertPointAtEnd(prologuebb)
+	//arg := fn.Param(0)
+	//arg = fr.builder.CreateBitCast(arg, structllptr, "")
+	//for i, ssaarg := range args {
+	//	argptr := thunkfr.builder.CreateStructGEP(arg, i, "")
+	//	arg := thunkfr.builder.CreateLoad(argptr, "")
+	//	arg.env[ssaarg] = newValue(arg, ssaarg.Type())
+	//}
+
+	entrybb := llvm.AddBasicBlock(fn, "entry")
+	//br := wrapfr.builder.CreateBr(entrybb)
+	//wrapfr.allocaBuilder.SetInsertPointBefore(br)
+
+	wrapfr.builder.SetInsertPointAtEnd(entrybb)
+
+	//args := []llvm.Value{llvm.Undef(int8ptr)}
+
+	//argtyp := llvm.PointerType(llvm.Int8Type(), 0)
+	//argcopy := fr.allocaBuilder.CreateAlloca(argtyp, "")
+	//argcopy = innerfn.Param(0)
+	wrapfr.builder.CreateCall(innerfn, []llvm.Value{fn.Param(0)}, "")
+
+	null_ptr := llvm.ConstNull(llvm.PointerType(llvm.Int8Type(), 0))
+	wrapfr.runtime.pthreadExit.call(wrapfr, null_ptr)
+
+	wrapfr.builder.CreateRet(null_ptr)
+	return fr.builder.CreateBitCast(fn, i8ptr, "")
 }
