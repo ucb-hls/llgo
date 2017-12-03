@@ -978,9 +978,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		fr.builder.CreateStore(thread, threadptr)
 
 		// Do not need to use any pthread_attr_t attributes now - send a NULL.
-		attrtyp := llvm.PointerType(llvm.Int8Type(), 0)
-		attrptr := fr.allocaBuilder.CreateAlloca(attrtyp, "")
-		fr.builder.CreateStore(llvm.ConstNull(attrtyp), attrptr)
+		attrptr := llvm.ConstNull(llvm.PointerType(llvm.Int8Type(), 0))
 
 		//fr.runtime.Go.call(fr, fn, arg)
 		fr.runtime.pthreadCreate.call(fr, threadptr, attrptr, wrappedfnptr, arg)
