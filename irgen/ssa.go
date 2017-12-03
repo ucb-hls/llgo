@@ -729,7 +729,7 @@ func (fr *frame) nilCheck(v ssa.Value, llptr llvm.Value) {
 	if !fr.isNonNull(v) {
 		//ptrnull := fr.builder.CreateIsNull(llptr, "")
 		//fr.condBrRuntimeError(ptrnull, gccgoRuntimeErrorNIL_DEREFERENCE)
-		println("Jenny nilCheck", v)
+		//println("Jenny nilCheck", v)
 	}
 }
 
@@ -965,31 +965,26 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		fr.env[instr] = newValue(fieldptr, fieldptrtyp)
 
 	case *ssa.Go:
-		fn, arg := fr.createThunk(instr)
-	  // pthread_t unsigned long -> Uint32
-	  //pthread_create(pthread_t *, const pthread_attr_t *,
-			  //void *(*)(void *), void *);
+		fn, arg := fr.createThunkRaw(instr)
+		wrappedfnptr := fr.createPthreadWrapper(fn)
 
-		println("JENNY: pthread_create")
-		// pthread_t run;
-		p := fr.allocaBuilder.CreateAlloca(llvm.Int32Type(), "p")
-		// pthread_t* run_ptr = & run;
-		p_ptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(llvm.Int32Type(), 0), "")
-		fr.builder.CreateStore(p, p_ptr)
+		// From $ man pthread_create
+		//		int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+		//								 void *(*start_routine) (void *), void *arg);
 
-		// pthread_attr_t attr;
-		// pthread_attr_t* attr = & attr;
+		// The pthread_t (typedef's uint32) thread ID and its pointer.
+		thread := fr.allocaBuilder.CreateAlloca(llvm.Int32Type(), "p")
+		threadptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(llvm.Int32Type(), 0), "")
+		fr.builder.CreateStore(thread, threadptr)
 
-		// Do not need to use attributes now, and the Int32Type is not correct
-		//a := fr.allocaBuilder.CreateAlloca(llvm.Int32Type(), "a")
-		a_typ := llvm.PointerType(llvm.Int32Type(), 0)
-		a_ptr := fr.allocaBuilder.CreateAlloca(a_typ, "")
-		fr.builder.CreateStore(llvm.ConstNull(a_typ), a_ptr)
-		// void* func
-		//pthread_create(run_ptr, NULL, main_OC_main_KD_main_OC_main_EC_1, (void *)llvm_cbe_tmp__16);
+		// Do not need to use any pthread_attr_t attributes now - send a NULL.
+		attrtyp := llvm.PointerType(llvm.Int8Type(), 0)
+		attrptr := fr.allocaBuilder.CreateAlloca(attrtyp, "")
+		fr.builder.CreateStore(llvm.ConstNull(attrtyp), attrptr)
 
 		//fr.runtime.Go.call(fr, fn, arg)
-		fr.runtime.pthreadCreate.call(fr, p_ptr, a_ptr, fn, arg)
+		fr.runtime.pthreadCreate.call(fr, threadptr, attrptr, wrappedfnptr, arg)
+		//fr.module.Module.Dump()
 
 	case *ssa.If:
 		cond := fr.llvmvalue(instr.Cond)
