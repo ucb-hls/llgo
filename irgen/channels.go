@@ -45,6 +45,8 @@ func (fr *frame) makeChanInternal(chantyp types.Type, size *govalue) *govalue {
 func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 	elem = fr.convert(elem, elemtyp)
+
+	// JENNY elem.value is the pointer to the value  
 	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
 	fr.builder.CreateStore(elem.value, elemptr)
 	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
@@ -52,7 +54,8 @@ func (fr *frame) chanSend(ch *govalue, elem *govalue) {
 	// fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
 	// TODO(growly): We need to deref elemptr... and convert it to a
 	// Uint64, which is what the fifo interface takes.
-	fr.runtime.sendBigFifo.call(fr, ch.value, elemptr)
+	elemvalue := fr.builder.CreateLoad(elemptr, "")
+	fr.runtime.sendBigFifo.call(fr, ch.value, elemvalue)
 }
 
 func (fr *frame) chanSendInternal(ch *govalue, elem *govalue) {
