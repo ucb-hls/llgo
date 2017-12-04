@@ -295,7 +295,9 @@ func (tm *llvmTypeMap) ToLLVM(t types.Type) llvm.Type {
 }
 
 func (tm *llvmTypeMap) toLLVM(t types.Type, name string) llvm.Type {
+	//fmt.Println("arya: llvmTypeMap.toLLVM(",t.String(), "name", name)
 	lt, ok := tm.types.At(t).(llvm.Type)
+	//fmt.Println("arya: llvmTypeMap.toLLVM(",t.String(), "name", name, "lt", lt, "ok", ok)
 	if !ok {
 		lt = tm.makeLLVMType(t, name)
 		if lt.IsNil() {

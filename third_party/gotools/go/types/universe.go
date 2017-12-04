@@ -43,7 +43,8 @@ var Typ = [...]*Basic{
 	String:        {String, IsString, "string"},
 	UnsafePointer: {UnsafePointer, 0, "Pointer"},
 
-	//Fifo:				{Fifo, 0, "FIFIO"},
+	// If treating Fifo as a basic type called "FIFO", do this.
+	//Fifo:				{Fifo, 0, "FIFO"},
 
 	UntypedBool:    {UntypedBool, IsBoolean | IsUntyped, "untyped bool"},
 	UntypedInt:     {UntypedInt, IsInteger | IsUntyped, "untyped int"},
@@ -53,6 +54,9 @@ var Typ = [...]*Basic{
 	UntypedString:  {UntypedString, IsString | IsUntyped, "untyped string"},
 	UntypedNil:     {UntypedNil, IsUntyped, "untyped nil"},
 }
+
+// Define FiFo as a Named type.
+var Fifo *Named = &Named{underlying: NewStruct([]*Var{}, []string{})}
 
 var aliases = [...]*Basic{
 	{Byte, IsInteger | IsUnsigned, "byte"},
@@ -66,6 +70,9 @@ func defPredeclaredTypes() {
 	for _, t := range aliases {
 		def(NewTypeName(token.NoPos, nil, t.name, t))
 	}
+
+	// Register FIFO as a Named type.
+	def(NewTypeName(token.NoPos, nil, "FIFO", Fifo))
 
 	// Error has a nil package in its qualified name since it is in no package
 	res := NewVar(token.NoPos, nil, "", Typ[String])

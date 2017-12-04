@@ -15,6 +15,7 @@
 package irgen
 
 import (
+	"fmt"
 	"llvm.org/llgo/third_party/gotools/go/types"
 	"llvm.org/llvm/bindings/go/llvm"
 )
@@ -56,6 +57,14 @@ func (t floatBType) ToLLVM(c llvm.Context) llvm.Type {
 	} else {
 		return c.FloatType()
 	}
+}
+
+type fifoBType struct {}
+
+func (t fifoBType) ToLLVM(c llvm.Context) llvm.Type {
+	llf  := c.StructCreateNamed("FIFO")
+	llf.StructSetBody([]llvm.Type{}, false)
+	return llf
 }
 
 type structBType struct {
@@ -115,6 +124,13 @@ func (tm *llvmTypeMap) sliceBackendType() backendType {
 func (tm *llvmTypeMap) getBackendType(t types.Type) backendType {
 	switch t := t.(type) {
 	case *types.Named:
+		if (t == types.Fifo) {
+			fmt.Println("arya: getBackendType for Named is equal to types.Fifo")
+		}
+		if (t.Obj().Name() == "FIFO") {
+			fmt.Println("getBackendType for Named emitting hack")
+			return &fifoBType{}
+		}
 		return tm.getBackendType(t.Underlying())
 
 	case *types.Basic:
@@ -163,7 +179,26 @@ func (tm *llvmTypeMap) getBackendType(t types.Type) backendType {
 		}
 		return &structBType{fields}
 
-	case *types.Pointer, *types.Signature, *types.Map, *types.Chan:
+	case *types.Pointer:
+		fmt.Println("arya: getBackendType for a pointer", t.Elem().String())
+		switch n := t.Elem().(type) {
+			case *types.Named:
+				fmt.Println("arya: pointer points to named type", n.Obj().Name())
+				if (n == types.Fifo) {
+					fmt.Println("arya: type is equal to types.Fifo")
+				}
+				if (n.Obj().Name() == "FIFO") {
+					fmt.Println("emitting hack")
+					return &fifoBType{}
+				}
+				return &ptrBType{}
+			default:
+				fmt.Println("arya: pointer points to something boring:", n.String())
+				// As below
+				return &ptrBType{}
+		}
+
+	case *types.Signature, *types.Map, *types.Chan:
 		return &ptrBType{}
 
 	case *types.Interface:
@@ -246,6 +281,10 @@ func (tm *llvmTypeMap) classifyEightbyte(offsets []offsetedType, numInt, numSSE 
 func (tm *llvmTypeMap) expandType(argTypes []llvm.Type, argAttrs []llvm.Attribute, bt backendType) ([]llvm.Type, []llvm.Attribute, int, int) {
 	var numInt, numSSE int
 	var argAttr llvm.Attribute
+
+	for _, f := range argTypes {
+		fmt.Println("expandType", f)
+	}
 
 	switch bt := bt.(type) {
 	case *structBType, *arrayBType:

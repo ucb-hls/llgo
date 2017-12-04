@@ -44,6 +44,8 @@ const (
 	String
 	UnsafePointer
 
+	// When Fifo is a Basic type defined in the Typ array ([]*Basic), this
+	// untyped const is used as its index.
 	//Fifo
 
 	// types for untyped values

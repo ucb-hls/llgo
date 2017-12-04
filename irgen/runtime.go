@@ -150,9 +150,14 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 	Uintptr := types.Typ[types.Uintptr]
 	UnsafePointer := types.Typ[types.UnsafePointer]
 
-	Fifo := types.NewStruct([]*types.Var{}, []string{})
+	//Fifo := types.NewStruct([]*types.Var{}, []string{})
+	//FifoPtr := types.NewPointer(Fifo)
+	
+	// When Fifo is a Basic type defined in the types.Typ array and indexed by the const types.Fifo
 	//FifoPtr := types.NewPointer(types.Typ[types.Fifo])
-	FifoPtr := types.NewPointer(Fifo)
+
+	// When Fifo is trying to be a Named type
+	FifoPtr := types.NewPointer(types.Fifo)
 
 	EmptyInterface := types.NewInterface(nil, nil)
 	ByteSlice := types.NewSlice(types.Typ[types.Byte])
