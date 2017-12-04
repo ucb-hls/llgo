@@ -1086,6 +1086,17 @@ func (tm *TypeMap) emitTypeDescInitializers() {
 	var maxSize, maxAlign int64
 	maxAlign = 1
 
+	// This is like the result of makeStructType with no vals.
+	//fifoTdi := &typeDescInfo{}
+
+	fifo := llvm.ConstNamedStruct(tm.fifoType, []llvm.Value{})
+	// This is like the result of makePointerType with no vals.
+	fmt.Println("adding a global constant...")
+	fifoPtr := llvm.AddGlobal(tm.module, tm.fifoType, "")
+	fifoPtr.SetGlobalConstant(true)
+	fifoPtr.SetInitializer(fifo)
+	fifoPtr.SetLinkage(llvm.InternalLinkage)
+
 	for changed := true; changed; {
 		changed = false
 

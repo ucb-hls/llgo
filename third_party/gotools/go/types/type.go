@@ -44,6 +44,8 @@ const (
 	String
 	UnsafePointer
 
+	//Fifo
+
 	// types for untyped values
 	UntypedBool
 	UntypedInt

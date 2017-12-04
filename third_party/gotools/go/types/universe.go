@@ -43,6 +43,8 @@ var Typ = [...]*Basic{
 	String:        {String, IsString, "string"},
 	UnsafePointer: {UnsafePointer, 0, "Pointer"},
 
+	//Fifo:				{Fifo, 0, "FIFIO"},
+
 	UntypedBool:    {UntypedBool, IsBoolean | IsUntyped, "untyped bool"},
 	UntypedInt:     {UntypedInt, IsInteger | IsUntyped, "untyped int"},
 	UntypedRune:    {UntypedRune, IsInteger | IsUntyped, "untyped rune"},

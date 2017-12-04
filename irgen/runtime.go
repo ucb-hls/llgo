@@ -151,6 +151,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 	UnsafePointer := types.Typ[types.UnsafePointer]
 
 	Fifo := types.NewStruct([]*types.Var{}, []string{})
+	//FifoPtr := types.NewPointer(types.Typ[types.Fifo])
 	FifoPtr := types.NewPointer(Fifo)
 
 	EmptyInterface := types.NewInterface(nil, nil)
