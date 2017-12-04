@@ -258,7 +258,18 @@ func (u *unit) resolveFunctionGlobal(f *ssa.Function) llvm.Value {
 	}
 	name := u.types.mc.mangleFunctionName(f)
 
-	//println("JENNY: resolveFunctionGlobal ", name)
+	// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+	//
+	// NOTE(growly): This saves having to include/replace/build all the functions in
+	// useful packages, like fmt.
+	switch name {
+	case "fmt.Println":
+		fallthrough
+	case "fmt.Printf":
+		fmt.Println("arya: should replace ", name)
+	}
+	// HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+
 	// It's possible that the function already exists in the module;
 	// for example, if it's a runtime intrinsic that the compiler
 	// has already referenced.

@@ -29,8 +29,6 @@ type runtimeFnInfo struct {
 }
 
 func (rfi *runtimeFnInfo) init(tm *llvmTypeMap, m llvm.Module, name string, args []types.Type, results []types.Type, skipNest bool) {
-	// TODO(growly): Remove this.
-	fmt.Println("arya: initing runtimeFnInfo with name", name)
 	rfi.fi = new(functionTypeInfo)
 	*rfi.fi = tm.getFunctionTypeInfoOptionalNest(args, results, skipNest)
 	rfi.fn = rfi.fi.declare(m, name)
@@ -151,6 +149,9 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 	String := types.Typ[types.String]
 	Uintptr := types.Typ[types.Uintptr]
 	UnsafePointer := types.Typ[types.UnsafePointer]
+
+	Fifo := types.NewStruct([]*types.Var{}, []string{})
+	FifoPtr := types.NewPointer(Fifo)
 
 	EmptyInterface := types.NewInterface(nil, nil)
 	ByteSlice := types.NewSlice(types.Typ[types.Byte])
@@ -358,7 +359,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			// the right size (i.e. it's a void*).
 			args: []types.Type{Uint8, Uintptr},
 			// This needs to be interpreted as a FIFO* in the generated C.
-			res:  []types.Type{UnsafePointer},
+			res:  []types.Type{FifoPtr},
 			skipNest: true,
 		},
 		{
@@ -451,7 +452,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 		{
 			name: "fifo_read",
 			rfi:  &ri.receiveFifo,
-			args: []types.Type{UnsafePointer},
+			args: []types.Type{FifoPtr},
 			res:  []types.Type{Uint64},
 			skipNest: true,
 		},
@@ -515,7 +516,7 @@ func newRuntimeInterface(module llvm.Module, tm *llvmTypeMap) (*runtimeInterface
 			// TODO(growly):
 			// Can we just ignore the ChanType pointer?
 			// args: []types.Type{UnsafePointer, UnsafePointer, UnsafePointer},
-			args: []types.Type{UnsafePointer, Uint64},
+			args: []types.Type{FifoPtr, Uint64},
 			skipNest: true,
 		},
 		{

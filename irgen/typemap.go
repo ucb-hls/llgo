@@ -174,7 +174,13 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 
 	tm.fifoType = tm.ctx.StructCreateNamed("FIFO")
 	// TODO(growly): I don't want to do the "StructSetBody" though
-	tm.fifoType.StructSetBody([]llvm.Type{voidPtrType}, false)
+	// First parameter is a list of elements, second is whether it is packed.
+	tm.fifoType.StructSetBody([]llvm.Type{}, false)
+	if tm.fifoType.IsStructPacked() {
+		fmt.Println("fifoType is packed")
+	} else {
+		fmt.Println("fifoType is not packed")
+	}
 
 	tm.uncommonTypeType = tm.ctx.StructCreateNamed("uncommonType")
 	tm.uncommonTypeType.StructSetBody([]llvm.Type{
@@ -1511,6 +1517,7 @@ func (tm *TypeMap) getTypeDescInfo(t types.Type) *typeDescInfo {
 	var b bytes.Buffer
 	tm.mc.mangleTypeDescriptorName(t, &b)
 
+	fmt.Println("llvm.AddGlobal for ", b.String())
 	global := llvm.AddGlobal(tm.module, tm.getTypeDescType(t), b.String())
 	global.SetGlobalConstant(true)
 	ptr := llvm.ConstBitCast(global, llvm.PointerType(tm.commonTypeType, 0))
