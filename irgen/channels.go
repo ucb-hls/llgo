@@ -43,19 +43,11 @@ func (fr *frame) makeChanInternal(chantyp types.Type, size *govalue) *govalue {
 
 // chanSend implements ch<- x
 func (fr *frame) chanSend(ch *govalue, elem *govalue) {
+	// elemtyp is uint64_t for LegUp fifo 
 	elemtyp := ch.Type().Underlying().(*types.Chan).Elem()
 	elem = fr.convert(elem, elemtyp)
 
-	// JENNY elem.value is the pointer to the value  
-	elemptr := fr.allocaBuilder.CreateAlloca(elem.value.Type(), "")
-	fr.builder.CreateStore(elem.value, elemptr)
-	elemptr = fr.builder.CreateBitCast(elemptr, llvm.PointerType(llvm.Int8Type(), 0), "")
-	//chantyp := fr.types.ToRuntime(ch.Type())
-	// fr.runtime.sendBig.call(fr, chantyp, ch.value, elemptr)
-	// TODO(growly): We need to deref elemptr... and convert it to a
-	// Uint64, which is what the fifo interface takes.
-	elemvalue := fr.builder.CreateLoad(elemptr, "")
-	fr.runtime.sendBigFifo.call(fr, ch.value, elemvalue)
+	fr.runtime.sendBigFifo.call(fr, ch.value, elem.value)
 }
 
 func (fr *frame) chanSendInternal(ch *govalue, elem *govalue) {

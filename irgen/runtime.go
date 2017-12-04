@@ -662,11 +662,12 @@ func (fr *frame) createTypeMalloc(t types.Type) llvm.Value {
 	t_uly := t.Underlying()
 	v := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(t_uly), "")
 
-	v_ptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(fr.types.ToLLVM(t_uly), 0) ,"")
-	fr.builder.CreateStore(v, v_ptr)
+	//v_ptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(fr.types.ToLLVM(t_uly), 0) ,"")
+	//fr.builder.CreateStore(v, v_ptr)
 	//return v_ptr
 
-	return fr.builder.CreateBitCast(v_ptr, llvm.PointerType(fr.types.ToLLVM(t), 0), "")
+	return fr.builder.CreateBitCast(v, llvm.PointerType(fr.types.ToLLVM(t), 0), "")
+	//return fr.builder.CreateBitCast(v_ptr, llvm.PointerType(fr.types.ToLLVM(t), 0), "")
 	//malloc := fr.runtime.New.callOnly(fr, fr.types.ToRuntime(t), size)[0]
 	//return fr.builder.CreateBitCast(malloc, llvm.PointerType(fr.types.ToLLVM(t), 0), "")
 }
