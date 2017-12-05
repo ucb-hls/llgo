@@ -66,9 +66,9 @@ type TypeMap struct {
 
 	commonTypeType, uncommonTypeType, ptrTypeType, funcTypeType, arrayTypeType, sliceTypeType, mapTypeType, interfaceTypeType, structTypeType llvm.Type
 
-	// chanTypeType llvm.Type
+	chanTypeType llvm.Type
 
-	fifoType		llvm.Type
+	//fifoType		llvm.Type
 	mapDescType		llvm.Type
 
 	methodType, imethodType, structFieldType llvm.Type
@@ -175,9 +175,10 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 
 	tm.methodSliceType = tm.makeNamedSliceType("methodSlice", tm.methodType)
 
-	tm.fifoType = tm.ctx.StructCreateNamed("FIFO")
+	//tm.fifoType = tm.ctx.StructCreateNamed("FIFO")
 	// First parameter is a list of elements, second is whether it is packed.
 	//tm.fifoType.StructSetBody([]llvm.Type{}, false)
+	//tm.fifoType.StructSetBody([]llvm.Type{tm.ctx.Int8Type()}, false)
 
 	tm.uncommonTypeType = tm.ctx.StructCreateNamed("uncommonType")
 	tm.uncommonTypeType.StructSetBody([]llvm.Type{
@@ -237,12 +238,12 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 		commonTypeTypePtr, // elem
 	}, false)
 
-	//tm.chanTypeType = tm.ctx.StructCreateNamed("chanType")
-	//tm.chanTypeType.StructSetBody([]llvm.Type{
-	//	tm.commonTypeType,
-	//	commonTypeTypePtr, // elem
-	//	tm.inttype,        // dir
-	//}, false)
+	tm.chanTypeType = tm.ctx.StructCreateNamed("FIFO")
+	tm.chanTypeType.StructSetBody([]llvm.Type{
+		tm.commonTypeType,
+		commonTypeTypePtr, // elem
+		tm.inttype,        // dir
+	}, false)
 
 	tm.imethodType = tm.ctx.StructCreateNamed("imethod")
 	tm.imethodType.StructSetBody([]llvm.Type{
@@ -1018,7 +1019,7 @@ func (tm *TypeMap) getTypeDescType(t types.Type) llvm.Type {
 	case *types.Map:
 		return tm.mapTypeType
 	case *types.Chan:
-		return tm.fifoType
+		return tm.chanTypeType
 	case *types.Struct:
 		return tm.structTypeType
 	case *types.Interface:
@@ -1532,14 +1533,14 @@ func (tm *TypeMap) getTypeDescInfo(t types.Type) *typeDescInfo {
 	global.SetGlobalConstant(true)
 
 	var ptr, gc, gcPtr llvm.Value
-	if _, ok := t.(*types.Chan); ok {
-	// TODO(growly): What's the deal here?
-		fmt.Println("t is a Chan so we'll return a fifoType pointer. underlying:", t.Underlying().String())
-		ptr = llvm.ConstBitCast(global, llvm.PointerType(tm.fifoType, 0))
-	} else {
-		ptr = llvm.ConstBitCast(global, llvm.PointerType(tm.commonTypeType, 0))
+	//if _, ok := t.(*types.Chan); ok {
+	//// TODO(growly): What's the deal here?
+	//	fmt.Println("t is a Chan so we'll return a fifoType pointer. underlying:", t.Underlying().String())
+	//	ptr = llvm.ConstBitCast(global, llvm.PointerType(tm.fifoType, 0))
+	//} else {
+	ptr = llvm.ConstBitCast(global, llvm.PointerType(tm.commonTypeType, 0))
 		// TODO(growly): Make sure we don't use GC things for Chans
-	}
+	//}
 	gc = llvm.AddGlobal(tm.module, llvm.PointerType(llvm.Int8Type(), 0), b.String()+"$gc")
 	gc.SetGlobalConstant(true)
 	gcPtr = llvm.ConstBitCast(gc, llvm.PointerType(tm.ctx.Int8Type(), 0))
@@ -1923,25 +1924,25 @@ func (tm *TypeMap) makeMapDesc(ptr llvm.Value, m *types.Map) llvm.Value {
 }
 
 func (tm *TypeMap) makeChanType(t types.Type, c *types.Chan) llvm.Value {
-	//var vals [3]llvm.Value
-	//vals[0] = tm.makeCommonType(t)
-	//vals[1] = tm.getTypeDescriptorPointer(c.Elem())
+	var vals [3]llvm.Value
+	vals[0] = tm.makeCommonType(t)
+	vals[1] = tm.getTypeDescriptorPointer(c.Elem())
 
-	//// From gofrontend/go/types.cc
-	//// These bits must match the ones in libgo/runtime/go-type.h.
-	//var dir int
-	//switch c.Dir() {
-	//case types.RecvOnly:
-	//	dir = 1
-	//case types.SendOnly:
-	//	dir = 2
-	//case types.SendRecv:
-	//	dir = 3
-	//}
-	//vals[2] = llvm.ConstInt(tm.inttype, uint64(dir), false)
+	// From gofrontend/go/types.cc
+	// These bits must match the ones in libgo/runtime/go-type.h.
+	var dir int
+	switch c.Dir() {
+	case types.RecvOnly:
+		dir = 1
+	case types.SendOnly:
+		dir = 2
+	case types.SendRecv:
+		dir = 3
+	}
+	vals[2] = llvm.ConstInt(tm.inttype, uint64(dir), false)
 
-	//return llvm.ConstNamedStruct(tm.chanTypeType, vals[:])
-	return llvm.ConstNamedStruct(tm.fifoType, []llvm.Value{})
+	return llvm.ConstNamedStruct(tm.chanTypeType, vals[:])
+	//return llvm.ConstNamedStruct(tm.fifoType, []llvm.Value{})
 }
 
 func (tm *TypeMap) makeUncommonTypePtr(t types.Type) llvm.Value {
