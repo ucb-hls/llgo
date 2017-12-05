@@ -202,7 +202,8 @@ func (u *unit) translatePackage(pkg *ssa.Package) {
 
 	// Define remaining functions that were resolved during
 	// runtime type mapping, but not defined.
-	u.defineFunctionsInOrder(u.undefinedFuncs)
+	// JENNY
+	//u.defineFunctionsInOrder(u.undefinedFuncs)
 
 	// Set initializers for globals.
 	for global, init := range u.globalInits {
@@ -453,7 +454,8 @@ func (u *unit) defineFunction(f *ssa.Function) {
 	// additional GC roots to be created.
 	if fr.isInit {
 		fr.builder.SetInsertPointBefore(registerGcBlock.FirstInstruction())
-		fr.registerGcRoots()
+		// JENNY
+		//fr.registerGcRoots()
 	}
 }
 
@@ -1115,6 +1117,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 
 	case *ssa.MakeInterface:
 		// fr.ptr[instr.X] will be set if a pointer load was elided by canAvoidLoad
+		// JENNY comment out this part to remove interface 
 		if ptr, ok := fr.ptr[instr.X]; ok {
 			fr.env[instr] = fr.makeInterfaceFromPointer(ptr, instr.X.Type(), instr.Type())
 		} else {
