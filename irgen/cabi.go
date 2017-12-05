@@ -20,6 +20,9 @@ import (
 	"llvm.org/llvm/bindings/go/llvm"
 )
 
+// TODO(growly): Maps various contexts to definitions of the FIFO struct.
+var fifoTypeMap map[llvm.Context]llvm.Type = make(map[llvm.Context]llvm.Type)
+
 type abiArgInfo int
 
 const (
@@ -59,12 +62,30 @@ func (t floatBType) ToLLVM(c llvm.Context) llvm.Type {
 	}
 }
 
-type fifoBType struct {}
+type fifoBType struct {
+}
 
 func (t fifoBType) ToLLVM(c llvm.Context) llvm.Type {
-	llf  := c.StructCreateNamed("FIFO")
-	llf.StructSetBody([]llvm.Type{}, false)
-	return llf
+	llty, ok := fifoTypeMap[c]
+	if !ok {
+		llty = c.StructCreateNamed("FIFO")
+		llty.StructSetBody([]llvm.Type{}, false)
+		fifoTypeMap[c] = llty
+	}
+	return llty
+	//llty  := c.StructCreateNamed("FIFO")
+	//llty.StructSetBody([]llvm.Type{}, false)
+	//return llty
+}
+
+type specificPtrBType struct {
+	base backendType
+}
+
+func (t specificPtrBType) ToLLVM(c llvm.Context) llvm.Type {
+	llty := llvm.PointerType(t.base.ToLLVM(c), 0)
+	fmt.Println("specificPtrBType.ToLLVM:", llty)
+	return llty
 }
 
 type structBType struct {
@@ -189,11 +210,12 @@ func (tm *llvmTypeMap) getBackendType(t types.Type) backendType {
 				}
 				if (n.Obj().Name() == "FIFO") {
 					fmt.Println("emitting hack")
-					return &fifoBType{}
+					return &specificPtrBType{base: &fifoBType{}}
+					//return &ptrBType{}
 				}
 				return &ptrBType{}
 			default:
-				fmt.Println("arya: pointer points to something boring:", n.String())
+				// Pointer points to something boring
 				// As below
 				return &ptrBType{}
 		}
@@ -281,10 +303,6 @@ func (tm *llvmTypeMap) classifyEightbyte(offsets []offsetedType, numInt, numSSE 
 func (tm *llvmTypeMap) expandType(argTypes []llvm.Type, argAttrs []llvm.Attribute, bt backendType) ([]llvm.Type, []llvm.Attribute, int, int) {
 	var numInt, numSSE int
 	var argAttr llvm.Attribute
-
-	for _, f := range argTypes {
-		fmt.Println("expandType", f)
-	}
 
 	switch bt := bt.(type) {
 	case *structBType, *arrayBType:
