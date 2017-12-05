@@ -220,7 +220,10 @@ func (tm *llvmTypeMap) getBackendType(t types.Type) backendType {
 				return &ptrBType{}
 		}
 
-	case *types.Signature, *types.Map, *types.Chan:
+	case *types.Chan:
+		return &specificPtrBType{base: &fifoBType{}}
+
+	case *types.Signature, *types.Map:
 		return &ptrBType{}
 
 	case *types.Interface:

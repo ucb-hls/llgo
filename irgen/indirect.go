@@ -15,6 +15,7 @@
 package irgen
 
 import (
+	"fmt"
 	"llvm.org/llgo/third_party/gotools/go/ssa"
 	"llvm.org/llgo/third_party/gotools/go/types"
 	"llvm.org/llvm/bindings/go/llvm"
@@ -41,6 +42,7 @@ func (fr *frame) createThunkRaw(call ssa.CallInstruction) (thunk llvm.Value, arg
 		case *ssa.Builtin, *ssa.Function, *ssa.Const, *ssa.Global:
 			// Do nothing: we can generate these in the thunk
 		default:
+			fmt.Println("arg.Type()", arg.Type().String())
 			if !seenarg[arg] {
 				seenarg[arg] = true
 				args = append(args, arg)
@@ -72,10 +74,16 @@ func (fr *frame) createThunkRaw(call ssa.CallInstruction) (thunk llvm.Value, arg
 	} else {
 		structtype := types.NewStruct(argtypes, nil)
 		arg = fr.createTypeMalloc(structtype)
+		fmt.Println("arg:", arg.Type().String())
 		structllptr = arg.Type()
 		for i, ssaarg := range args {
 			argptr := fr.builder.CreateStructGEP(arg, i, "")
-			fr.builder.CreateStore(fr.llvmvalue(ssaarg), argptr)
+			llv := fr.llvmvalue(ssaarg)
+			fmt.Println("left:", llv.Type().String(), "right:", argptr.Type().String())
+			if llv.Type() != arg.Type() {
+				fmt.Println("arg types not equal")
+			}
+			fr.builder.CreateStore(llv, argptr)
 		}
 		arg = fr.builder.CreateBitCast(arg, i8ptr, "")
 	}

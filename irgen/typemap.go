@@ -67,7 +67,7 @@ type TypeMap struct {
 	commonTypeType, uncommonTypeType, ptrTypeType, funcTypeType, arrayTypeType, sliceTypeType, mapTypeType, interfaceTypeType, structTypeType llvm.Type
 
 	commonTypeTypePtr llvm.Type
-	arrayOfChanTypeType, sliceOfChanTypeType llvm.Type
+	arrayOfChanTypeType, sliceOfChanTypeType, structChanFieldType llvm.Type
 
 	mapTypeMap map[string]llvm.Type
 
@@ -264,6 +264,15 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 		stringPtrType,     // name
 		stringPtrType,     // pkgPath
 		tm.commonTypeTypePtr, // typ
+		stringPtrType,     // tag
+		tm.inttype,        // offset
+	}, false)
+
+	tm.structChanFieldType = tm.ctx.StructCreateNamed("structChanFieldType")
+	tm.structChanFieldType.StructSetBody([]llvm.Type{
+		stringPtrType,     // name
+		stringPtrType,     // pkgPath
+		tm.fifoTypePtr, // typ
 		stringPtrType,     // tag
 		tm.inttype,        // offset
 	}, false)
@@ -1885,8 +1894,12 @@ func (tm *TypeMap) makeStructType(t types.Type, s *types.Struct) llvm.Value {
 			sfvals[3] = llvm.ConstPointerNull(llvm.PointerType(tm.stringType, 0))
 		}
 		sfvals[4] = llvm.ConstInt(tm.inttype, uint64(offsets[i]), false)
-
-		structFields[i] = llvm.ConstNamedStruct(tm.structFieldType, sfvals[:])
+		
+		if _, ok := field.Type().(*types.Chan); ok {
+			structFields[i] = llvm.ConstNamedStruct(tm.structChanFieldType, sfvals[:])
+		} else {
+			structFields[i] = llvm.ConstNamedStruct(tm.structFieldType, sfvals[:])
+		}
 	}
 	vals[1] = tm.makeSlice(structFields, tm.structFieldSliceType)
 
