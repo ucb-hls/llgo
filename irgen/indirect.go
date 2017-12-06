@@ -79,6 +79,7 @@ func (fr *frame) createThunkRaw(call ssa.CallInstruction) (thunk llvm.Value, arg
 		for i, ssaarg := range args {
 			argptr := fr.builder.CreateStructGEP(arg, i, "")
 			llv := fr.llvmvalue(ssaarg)
+			fmt.Println("ssaarg", ssaarg.Type(), "left:", llv.Type().String(), "right:", argptr.Type().String())
 			fr.builder.CreateStore(llv, argptr)
 		}
 		arg = fr.builder.CreateBitCast(arg, i8ptr, "")

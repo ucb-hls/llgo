@@ -207,7 +207,7 @@ func (tm *llvmTypeMap) getBackendType(t types.Type) backendType {
 			// the same. In this hack.
 			case *types.Chan:
 				fmt.Println("arya: pointer points to Chan", n.String())
-				return &specificPtrBType{base: &fifoBType{}}
+				return &specificPtrBType{base: &specificPtrBType{base: &fifoBType{}}}
 			case *types.Named:
 				fmt.Println("arya: pointer points to named type", n.Obj().Name())
 				if (n == types.Fifo) {
@@ -225,8 +225,12 @@ func (tm *llvmTypeMap) getBackendType(t types.Type) backendType {
 				return &ptrBType{}
 		}
 
+	// If a FIFO type is a straight FIFO struct,
+	//		then a pointer-to-FIFO is a FIFO*
+	//		a Chan is a FIFO*
+	//		a pointer-to-Chan is a FIFO**	:/
 	case *types.Chan:
-		return &fifoBType{}
+		return &specificPtrBType{base: &fifoBType{}}
 
 	case *types.Signature, *types.Map:
 		return &ptrBType{}
