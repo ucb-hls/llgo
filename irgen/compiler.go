@@ -341,10 +341,10 @@ func (c *compiler) createInitMainFunction(mainPkg *ssa.Package) {
 	args := []llvm.Value{llvm.Undef(int8ptr)}
 
 	if !c.GccgoABI {
-		initfn := c.module.Module.NamedFunction("main..import")
-		if !initfn.IsNil() {
-			builder.CreateCall(initfn, args, "")
-		}
+//		initfn := c.module.Module.NamedFunction("main..import")
+//		if !initfn.IsNil() {
+//			builder.CreateCall(initfn, args, "")
+//		}
 		builder.CreateRetVoid()
 		return
 	}

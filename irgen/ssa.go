@@ -319,11 +319,11 @@ func (u *unit) defineFunction(f *ssa.Function) {
 	isMethod := f.Signature.Recv() != nil
 
 	// Methods cannot be referred to via a descriptor.
-	if !isMethod {
-		llfd := u.resolveFunctionDescriptorGlobal(f)
-		llfd.SetInitializer(llvm.ConstBitCast(llfn, llvm.PointerType(llvm.Int8Type(), 0)))
-		llfd.SetLinkage(linkage)
-	}
+//	if !isMethod {
+//		llfd := u.resolveFunctionDescriptorGlobal(f)
+//		llfd.SetInitializer(llvm.ConstBitCast(llfn, llvm.PointerType(llvm.Int8Type(), 0)))
+//		llfd.SetLinkage(linkage)
+//	}
 
 	// We only need to emit a descriptor for functions without bodies.
 	if len(f.Blocks) == 0 {
@@ -454,8 +454,7 @@ func (u *unit) defineFunction(f *ssa.Function) {
 	// additional GC roots to be created.
 	if fr.isInit {
 		fr.builder.SetInsertPointBefore(registerGcBlock.FirstInstruction())
-		// JENNY
-		//fr.registerGcRoots()
+		fr.registerGcRoots()
 	}
 }
 
