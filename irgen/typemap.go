@@ -67,7 +67,8 @@ type TypeMap struct {
 	commonTypeType, uncommonTypeType, ptrTypeType, funcTypeType, interfaceTypeType, structChanFieldType, structTypeType llvm.Type
 
 	commonTypeTypePtr llvm.Type
-	arrayTypeType, arrayOfChanTypeType, sliceTypeType, sliceOfChanTypeType, mapTypeType *llvm.Type
+	arrayTypeType, arrayOfChanTypeType, sliceTypeType, sliceOfChanTypeType *llvm.Type
+	// mapTypeType is now entirely stored in the mapTypeMap
 
 	mapTypeMap map[string]*llvm.Type
 
@@ -235,7 +236,6 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 	tm.sliceTypeType = tm.CreateSliceTypeType("sliceType", tm.commonTypeTypePtr)
 
 	tm.mapTypeMap = make(map[string]*llvm.Type)
-	tm.mapTypeType = tm.CreateMapTypeType("mapType", &tm.commonTypeTypePtr, &tm.commonTypeTypePtr)
 
 	//tm.chanTypeType = tm.ctx.StructCreateNamed("chanType")
 	//tm.chanTypeType.StructSetBody([]llvm.Type{
@@ -316,14 +316,53 @@ func (tm *TypeMap) CreateSliceTypeType(s string, e llvm.Type) *llvm.Type {
 	return &sliceType
 }
 
-func (tm *TypeMap) CreateMapTypeType(s string, k *llvm.Type, e *llvm.Type) *llvm.Type {
-	mapType := tm.ctx.StructCreateNamed(s)
-	mapType.StructSetBody([]llvm.Type{
+func (tm *TypeMap) getMapTypeName(m *types.Map) string {
+	s := "mapType"
+	if m == nil {
+		return s
+	}
+	if _, ok := m.Key().(*types.Chan); ok {
+		s += "_keychan"
+	}
+	if _, ok := m.Elem().(*types.Chan); ok {
+		s += "_elemchan"
+	}
+	return s
+}
+
+// Depending on whether the key or element (or both) type is a chan, we have to
+// generate a new map type descriptor; but we want to create the map type in
+// the LLVM context only once for each combination. This function will create
+// the type once for the combination as necessary and store the result in the
+// mapTypeMap for future references.
+func (tm *TypeMap) getMapTypeType(m *types.Map) *llvm.Type {
+	s := tm.getMapTypeName(m)
+
+	if t, ok := tm.mapTypeMap[s]; ok {
+		fmt.Printf("map type %q already exists: %s", s, t.String())
+		return t
+	}
+
+	kt := &tm.commonTypeTypePtr
+	if _, ok := m.Key().(*types.Chan); ok {
+		kt = &tm.fifoTypePtr
+	}
+	et := &tm.commonTypeTypePtr
+	if _, ok := m.Elem().(*types.Chan); ok {
+		et = &tm.fifoTypePtr
+	}
+
+	llm := tm.ctx.StructCreateNamed(s)
+	llm.StructSetBody([]llvm.Type{
 		tm.commonTypeType,
-		*k, // key
-		*e, // elem
+		*kt, // key
+		*et, // elem
 	}, false)
-	return &mapType
+
+	fmt.Printf("map type %q mapped to new type: %s", s, llm.String())
+
+	tm.mapTypeMap[s] = &llm
+	return &llm
 }
 
 func (tm *llvmTypeMap) ToLLVM(t types.Type) llvm.Type {
@@ -1061,13 +1100,7 @@ func (tm *TypeMap) getTypeDescType(t types.Type) llvm.Type {
 		}
 		return *tm.sliceTypeType
 	case *types.Map:
-		key := tm.getMapTypeName(v.Key(), v.Elem())
-		if k, ok := tm.mapTypeMap[key]; ok {
-			fmt.Println("found existing type for k:",v.Key().String(),"v:",v.Elem().String())
-			return *k
-		}
-		fmt.Println("returning default map type for", key)
-		return *tm.mapTypeType
+		return *tm.getMapTypeType(v)
 	case *types.Chan:
 		return tm.fifoType
 	case *types.Struct:
@@ -1966,42 +1999,13 @@ func (tm *TypeMap) makeInterfaceType(t types.Type, i *types.Interface) llvm.Valu
 	return llvm.ConstNamedStruct(tm.interfaceTypeType, vals[:])
 }
 
-func (tm *TypeMap) getMapTypeName(key, elem types.Type) string {
-	typeName := "mapType"
-	if _, ok := key.(*types.Chan); ok {
-		typeName += "_keychan"
-	}
-	if _, ok := elem.(*types.Chan); ok {
-		typeName += "_elemchan"
-	}
-	return typeName
-}
-
 func (tm *TypeMap) makeMapType(t types.Type, m *types.Map) llvm.Value {
 	var vals [3]llvm.Value
 	vals[0] = tm.makeCommonType(t)
 	vals[1] = tm.getTypeDescriptorPointer(m.Key())
 	vals[2] = tm.getTypeDescriptorPointer(m.Elem())
 
-	typeName := tm.getMapTypeName(m.Key(), m.Elem())
-	mapTypeType := tm.mapTypeType
-	if p, ok := tm.mapTypeMap[typeName]; ok {
-		mapTypeType = p
-		// fmt.Println("what is this...")
-	} else {
-		keyType := &tm.commonTypeTypePtr
-		if _, ok := m.Key().(*types.Chan); ok {
-			keyType = &tm.fifoTypePtr
-		}
-		elemType := &tm.commonTypeTypePtr
-		if _, ok := m.Elem().(*types.Chan); ok {
-			elemType = &tm.fifoTypePtr
-		}
-		fmt.Println("map type name is", typeName, "key", keyType.String(), "elem", elemType.String())
-		mapTypeType = tm.CreateMapTypeType(typeName, keyType, elemType)
-		tm.mapTypeMap[typeName] = mapTypeType
-	}
-	return llvm.ConstNamedStruct(*mapTypeType, vals[:])
+	return llvm.ConstNamedStruct(*tm.getMapTypeType(m), vals[:])
 }
 
 func (tm *TypeMap) makeMapDesc(ptr llvm.Value, m *types.Map) llvm.Value {
