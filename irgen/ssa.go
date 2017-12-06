@@ -895,7 +895,6 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 			global.SetLinkage(llvm.InternalLinkage)
 			fr.addGlobal(global, typ)
 			if _, ok := typ.(*types.Chan); !ok {
-				fmt.Println("blindly casting global", typ, "to uint8*", value.Name())
 				ptr := llvm.ConstBitCast(global, llvm.PointerType(llvm.Int8Type(), 0))
 				fr.env[instr] = newValue(ptr, instr.Type())
 			} else {
