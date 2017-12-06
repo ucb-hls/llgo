@@ -14,6 +14,7 @@
 package irgen
 
 import (
+	"fmt"
 	"llvm.org/llgo/third_party/gotools/go/types"
 )
 
@@ -30,6 +31,7 @@ func (fr *frame) makeClosure(fn *govalue, bindings []*govalue) *govalue {
 	block := fr.createTypeMalloc(types.NewStruct(fields, nil))
 	for i, v := range govalues {
 		addressPtr := fr.builder.CreateStructGEP(block, i, "")
+		fmt.Println("types to CreateStore ", v.value.Name(), "v.value", v.value.Type(), "addressPtr", addressPtr.Type())
 		fr.builder.CreateStore(v.value, addressPtr)
 	}
 	closure := fr.builder.CreateBitCast(block, fn.value.Type(), "")

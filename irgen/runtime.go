@@ -665,8 +665,11 @@ func (fr *frame) createTypeMalloc(t types.Type) llvm.Value {
 
   // allocaBuilder vs builder 
 	// Theoratically t is a pointer 
-	t_uly := t.Underlying()
-	v := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(t_uly), "")
+	//t_uly := t.Underlying()
+	fmt.Println("createTypeMalloc: these are the same? t", t, "t_uly", t.Underlying())
+	v := fr.allocaBuilder.CreateAlloca(fr.types.ToLLVM(t), "")
+
+	fmt.Println("return value from CreateAlloca has type", v.Type())
 
 	//v_ptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(fr.types.ToLLVM(t_uly), 0) ,"")
 	//fr.builder.CreateStore(v, v_ptr)

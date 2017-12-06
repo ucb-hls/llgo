@@ -706,9 +706,11 @@ func (fr *frame) value(v ssa.Value) (result *govalue) {
 		llglobal := llvm.AddGlobal(fr.module.Module, llelemtyp, vname)
 		llglobal = llvm.ConstBitCast(llglobal, fr.llvmtypes.ToLLVM(v.Type()))
 		fr.globals[v] = llglobal
+		fmt.Println("frame.value() returned from globals", llglobal.Type())
 		return newValue(llglobal, v.Type())
 	}
 	if value, ok := fr.env[v]; ok {
+		fmt.Println("frame.value() returned from env", value.value.Type())
 		return value
 	}
 
@@ -893,12 +895,21 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 			global := llvm.AddGlobal(fr.module.Module, llvmtyp, "")
 			global.SetLinkage(llvm.InternalLinkage)
 			fr.addGlobal(global, typ)
-			ptr := llvm.ConstBitCast(global, llvm.PointerType(llvm.Int8Type(), 0))
-			fr.env[instr] = newValue(ptr, instr.Type())
+			if _, ok := typ.(*types.Chan); !ok {
+				fmt.Println("blindly casting global", typ, "to uint8*", value.Name())
+				ptr := llvm.ConstBitCast(global, llvm.PointerType(llvm.Int8Type(), 0))
+				fr.env[instr] = newValue(ptr, instr.Type())
+			} else {
+				fr.env[instr] = newValue(global, instr.Type())
+			}
 		} else {
 			value = fr.createTypeMalloc(typ)
 			value.SetName(instr.Comment)
-			value = fr.builder.CreateBitCast(value, llvm.PointerType(llvm.Int8Type(), 0), "")
+			if _, ok := typ.(*types.Chan); !ok {
+				// Can either convert to LLVM types and check for FIFO, or just check for Chan here
+				fmt.Println("blindly casting malloc'd", typ, "to uint8*", value.Name())
+				value = fr.builder.CreateBitCast(value, llvm.PointerType(llvm.Int8Type(), 0), "")
+			}
 			fr.env[instr] = newValue(value, instr.Type())
 		}
 
@@ -986,7 +997,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		//								 void *(*start_routine) (void *), void *arg);
 
 		// The pthread_t (typedef's uint32) thread ID and its pointer.
-		thread := fr.allocaBuilder.CreateAlloca(llvm.Int32Type(), "p")
+		thread := fr.allocaBuilder.CreateAlloca(llvm.Int32Type(), "thread_id")
 		threadptr := fr.allocaBuilder.CreateAlloca(llvm.PointerType(llvm.Int32Type(), 0), "")
 		fr.builder.CreateStore(thread, threadptr)
 

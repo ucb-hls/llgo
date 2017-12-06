@@ -79,10 +79,6 @@ func (fr *frame) createThunkRaw(call ssa.CallInstruction) (thunk llvm.Value, arg
 		for i, ssaarg := range args {
 			argptr := fr.builder.CreateStructGEP(arg, i, "")
 			llv := fr.llvmvalue(ssaarg)
-			fmt.Println("left:", llv.Type().String(), "right:", argptr.Type().String())
-			if llv.Type() != arg.Type() {
-				fmt.Println("arg types not equal")
-			}
 			fr.builder.CreateStore(llv, argptr)
 		}
 		arg = fr.builder.CreateBitCast(arg, i8ptr, "")
@@ -110,6 +106,7 @@ func (fr *frame) createThunkRaw(call ssa.CallInstruction) (thunk llvm.Value, arg
 		thunkarg := thunkfn.Param(0)
 		thunkarg = thunkfr.builder.CreateBitCast(thunkarg, structllptr, "")
 		for i, ssaarg := range args {
+			fmt.Println("unpacking a ", ssaarg.Type())
 			thunkargptr := thunkfr.builder.CreateStructGEP(thunkarg, i, "")
 			thunkarg := thunkfr.builder.CreateLoad(thunkargptr, "")
 			thunkfr.env[ssaarg] = newValue(thunkarg, ssaarg.Type())

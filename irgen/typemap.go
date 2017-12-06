@@ -64,12 +64,12 @@ type TypeMap struct {
 	methodResolver MethodResolver
 	types.MethodSetCache
 
-	commonTypeType, uncommonTypeType, ptrTypeType, funcTypeType, arrayTypeType, sliceTypeType, mapTypeType, interfaceTypeType, structTypeType llvm.Type
+	commonTypeType, uncommonTypeType, ptrTypeType, funcTypeType, interfaceTypeType, structChanFieldType, structTypeType llvm.Type
 
 	commonTypeTypePtr llvm.Type
-	arrayOfChanTypeType, sliceOfChanTypeType, structChanFieldType llvm.Type
+	arrayTypeType, arrayOfChanTypeType, sliceTypeType, sliceOfChanTypeType, mapTypeType *llvm.Type
 
-	mapTypeMap map[string]llvm.Type
+	mapTypeMap map[string]*llvm.Type
 
 	// chanTypeType llvm.Type
 
@@ -234,8 +234,8 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 
 	tm.sliceTypeType = tm.CreateSliceTypeType("sliceType", tm.commonTypeTypePtr)
 
-	tm.mapTypeMap = make(map[string]llvm.Type)
-	tm.mapTypeType = tm.CreateMapTypeType("mapType", tm.commonTypeTypePtr, tm.commonTypeTypePtr)
+	tm.mapTypeMap = make(map[string]*llvm.Type)
+	tm.mapTypeType = tm.CreateMapTypeType("mapType", &tm.commonTypeTypePtr, &tm.commonTypeTypePtr)
 
 	//tm.chanTypeType = tm.ctx.StructCreateNamed("chanType")
 	//tm.chanTypeType.StructSetBody([]llvm.Type{
@@ -296,7 +296,7 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 	return tm
 }
 
-func (tm *TypeMap) CreateArrayTypeType(s string, e llvm.Type) llvm.Type {
+func (tm *TypeMap) CreateArrayTypeType(s string, e llvm.Type) *llvm.Type {
 	arrayType := tm.ctx.StructCreateNamed(s)
 	arrayType.StructSetBody([]llvm.Type{
 		tm.commonTypeType,
@@ -304,26 +304,26 @@ func (tm *TypeMap) CreateArrayTypeType(s string, e llvm.Type) llvm.Type {
 		e, // slice
 		tm.inttype,        // len
 	}, false)
-	return arrayType
+	return &arrayType
 }
 
-func (tm *TypeMap) CreateSliceTypeType(s string, e llvm.Type) llvm.Type {
+func (tm *TypeMap) CreateSliceTypeType(s string, e llvm.Type) *llvm.Type {
 	sliceType := tm.ctx.StructCreateNamed(s)
 	sliceType.StructSetBody([]llvm.Type{
 		tm.commonTypeType,
 		e,
 	}, false)
-	return sliceType
+	return &sliceType
 }
 
-func (tm *TypeMap) CreateMapTypeType(s string, k llvm.Type, e llvm.Type) llvm.Type {
+func (tm *TypeMap) CreateMapTypeType(s string, k *llvm.Type, e *llvm.Type) *llvm.Type {
 	mapType := tm.ctx.StructCreateNamed(s)
 	mapType.StructSetBody([]llvm.Type{
 		tm.commonTypeType,
-		k, // key
-		e, // elem
+		*k, // key
+		*e, // elem
 	}, false)
-	return mapType
+	return &mapType
 }
 
 func (tm *llvmTypeMap) ToLLVM(t types.Type) llvm.Type {
@@ -331,9 +331,8 @@ func (tm *llvmTypeMap) ToLLVM(t types.Type) llvm.Type {
 }
 
 func (tm *llvmTypeMap) toLLVM(t types.Type, name string) llvm.Type {
-	fmt.Println("arya: llvmTypeMap.toLLVM(",t.String(), "name", name, ")")
+	//fmt.Println("arya: llvmTypeMap.toLLVM(",t.String(), "name", name, ")")
 	lt, ok := tm.types.At(t).(llvm.Type)
-	//fmt.Println("arya: llvmTypeMap.toLLVM(",t.String(), "name", name, "lt", lt, "ok", ok)
 	if !ok {
 		lt = tm.makeLLVMType(t, name)
 		if lt.IsNil() {
@@ -341,6 +340,7 @@ func (tm *llvmTypeMap) toLLVM(t types.Type, name string) llvm.Type {
 		}
 		tm.types.Set(t, lt)
 	}
+	fmt.Println("arya: llvmTypeMap.toLLVM(",t.String(), "name", name, "lt", lt, "ok", ok)
 	return lt
 }
 
@@ -1052,22 +1052,22 @@ func (tm *TypeMap) getTypeDescType(t types.Type) llvm.Type {
 		return tm.funcTypeType
 	case *types.Array:
 		if _, ok := v.Elem().(*types.Chan); ok {
-			return tm.arrayOfChanTypeType
+			return *tm.arrayOfChanTypeType
 		}
-		return tm.arrayTypeType
+		return *tm.arrayTypeType
 	case *types.Slice:
 		if _, ok := v.Elem().(*types.Chan); ok {
-			return tm.sliceOfChanTypeType
+			return *tm.sliceOfChanTypeType
 		}
-		return tm.sliceTypeType
+		return *tm.sliceTypeType
 	case *types.Map:
 		key := tm.getMapTypeName(v.Key(), v.Elem())
 		if k, ok := tm.mapTypeMap[key]; ok {
 			fmt.Println("found existing type for k:",v.Key().String(),"v:",v.Elem().String())
-			return k
+			return *k
 		}
-		fmt.Println("no map type for ", key)
-		return tm.mapTypeType
+		fmt.Println("returning default map type for", key)
+		return *tm.mapTypeType
 	case *types.Chan:
 		return tm.fifoType
 	case *types.Struct:
@@ -1293,6 +1293,7 @@ func (tm *TypeMap) emitTypeDescInitializer(t types.Type, tdi *typeDescInfo) {
 }
 
 func (tm *TypeMap) makeTypeDescInitializer(t types.Type) llvm.Value {
+	fmt.Println("makeTypeDescInitializer t", t.String(), "t.Underlying()", t.Underlying().String())
 	switch u := t.Underlying().(type) {
 	case *types.Basic:
 		return tm.makeBasicType(t, u)
@@ -1582,7 +1583,7 @@ func (tm *TypeMap) getTypeDescInfo(t types.Type) *typeDescInfo {
 	var b bytes.Buffer
 	tm.mc.mangleTypeDescriptorName(t, &b)
 
-	fmt.Println("mapped global name", b.String(), "to", tm.getTypeDescType(t).String())
+	fmt.Println("adding global", b.String(), "of type:", tm.getTypeDescType(t).String())
 	global := llvm.AddGlobal(tm.module, tm.getTypeDescType(t), b.String())
 	global.SetGlobalConstant(true)
 
@@ -1840,14 +1841,14 @@ func (tm *TypeMap) makeArrayType(t types.Type, a *types.Array) llvm.Value {
 	vals[1] = tm.getTypeDescriptorPointer(a.Elem())
 	vals[2] = tm.getTypeDescriptorPointer(types.NewSlice(a.Elem()))
 	vals[3] = llvm.ConstInt(tm.inttype, uint64(a.Len()), false)
-	var arrayTypeType llvm.Type
+	var arrayTypeType *llvm.Type
 	if _, ok := a.Elem().(*types.Chan); ok {
 		fmt.Println("butchering an Array of Chan")
 		arrayTypeType = tm.arrayOfChanTypeType
 	} else {
 		arrayTypeType = tm.arrayTypeType
 	}
-	return llvm.ConstNamedStruct(arrayTypeType, vals[:])
+	return llvm.ConstNamedStruct(*arrayTypeType, vals[:])
 }
 
 func (tm *TypeMap) makeSliceType(t types.Type, s *types.Slice) llvm.Value {
@@ -1855,14 +1856,14 @@ func (tm *TypeMap) makeSliceType(t types.Type, s *types.Slice) llvm.Value {
 	vals[0] = tm.makeCommonType(t)
 	vals[1] = tm.getTypeDescriptorPointer(s.Elem())
 
-	var sliceTypeType llvm.Type
+	var sliceTypeType *llvm.Type
 	if _, ok := s.Elem().(*types.Chan); ok {
 		fmt.Println("butchering a Slice of Can")
 		sliceTypeType = tm.sliceOfChanTypeType
 	} else {
 		sliceTypeType = tm.sliceTypeType
 	}
-	return llvm.ConstNamedStruct(sliceTypeType, vals[:])
+	return llvm.ConstNamedStruct(*sliceTypeType, vals[:])
 }
 
 func (tm *TypeMap) makeStructType(t types.Type, s *types.Struct) llvm.Value {
@@ -1986,20 +1987,21 @@ func (tm *TypeMap) makeMapType(t types.Type, m *types.Map) llvm.Value {
 	mapTypeType := tm.mapTypeType
 	if p, ok := tm.mapTypeMap[typeName]; ok {
 		mapTypeType = p
+		// fmt.Println("what is this...")
 	} else {
-		keyType := tm.commonTypeTypePtr
+		keyType := &tm.commonTypeTypePtr
 		if _, ok := m.Key().(*types.Chan); ok {
-			keyType = tm.fifoTypePtr
+			keyType = &tm.fifoTypePtr
 		}
-		elemType := tm.commonTypeTypePtr
+		elemType := &tm.commonTypeTypePtr
 		if _, ok := m.Elem().(*types.Chan); ok {
-			elemType = tm.fifoTypePtr
+			elemType = &tm.fifoTypePtr
 		}
 		fmt.Println("map type name is", typeName, "key", keyType.String(), "elem", elemType.String())
 		mapTypeType = tm.CreateMapTypeType(typeName, keyType, elemType)
 		tm.mapTypeMap[typeName] = mapTypeType
 	}
-	return llvm.ConstNamedStruct(mapTypeType, vals[:])
+	return llvm.ConstNamedStruct(*mapTypeType, vals[:])
 }
 
 func (tm *TypeMap) makeMapDesc(ptr llvm.Value, m *types.Map) llvm.Value {
