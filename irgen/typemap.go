@@ -82,7 +82,7 @@ type TypeMap struct {
 
 	methodType, imethodType, structFieldType llvm.Type
 
-	typeSliceType, methodSliceType, imethodSliceType, structFieldSliceType llvm.Type
+	methodSliceType, imethodSliceType, structFieldSliceType llvm.Type
 
 	funcValType             llvm.Type
 	hashFnType, equalFnType llvm.Type
@@ -220,7 +220,6 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 		tm.commonTypeTypePtr,                        // ptrToThis
 	}, false)
 
-	// This is a slice of types?
 	tm.typeSliceType = tm.makeNamedSliceType("typeSlice", tm.commonTypeTypePtr)
 
 	tm.ptrTypeType = tm.ctx.StructCreateNamed("ptrType")
@@ -238,13 +237,13 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 	}, false)
 
 	// The default should be interpreted as arrayTypeType when no entry exists.
-	tm.arrayTypeType = tm.CreateArrayTypeType("arrayType", tm.commonTypeTypePtr)
+	tm.arrayTypeType = tm.createArrayTypeType("arrayType", tm.commonTypeTypePtr)
 
-	tm.arrayOfChanTypeType = tm.CreateArrayTypeType("arrayOfChanType", tm.chanTypeTypePtr)
+	tm.arrayOfChanTypeType = tm.createArrayTypeType("arrayOfChanType", tm.chanTypeTypePtr)
 
-	tm.sliceTypeType = tm.CreateSliceTypeType("sliceType", tm.commonTypeTypePtr)
+	tm.sliceTypeType = tm.createSliceTypeType("sliceType", tm.commonTypeTypePtr)
 	// The default should be interpreted as arrayTypeType when no entry exists.
-	tm.sliceOfChanTypeType = tm.CreateSliceTypeType("sliceOfChanType", tm.chanTypeTypePtr)
+	tm.sliceOfChanTypeType = tm.createSliceTypeType("sliceOfChanType", tm.chanTypeTypePtr)
 
 	tm.mapTypeMap = make(map[string]*llvm.Type)
 
@@ -307,7 +306,7 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 	return tm
 }
 
-func (tm *TypeMap) CreateArrayTypeType(s string, e llvm.Type) *llvm.Type {
+func (tm *TypeMap) createArrayTypeType(s string, e llvm.Type) *llvm.Type {
 	arrayType := tm.ctx.StructCreateNamed(s)
 	arrayType.StructSetBody([]llvm.Type{
 		tm.commonTypeType,
@@ -318,7 +317,7 @@ func (tm *TypeMap) CreateArrayTypeType(s string, e llvm.Type) *llvm.Type {
 	return &arrayType
 }
 
-func (tm *TypeMap) CreateSliceTypeType(s string, e llvm.Type) *llvm.Type {
+func (tm *TypeMap) createSliceTypeType(s string, e llvm.Type) *llvm.Type {
 	sliceType := tm.ctx.StructCreateNamed(s)
 	sliceType.StructSetBody([]llvm.Type{
 		tm.commonTypeType,
