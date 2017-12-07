@@ -373,6 +373,8 @@ func (u *unit) defineFunction(f *ssa.Function) {
 
 	for i, param := range f.Params {
 		llparam := fti.argInfos[i].decode(llvm.GlobalContext(), fr.builder, fr.builder)
+		// Keep param's name as the same as in Go code
+		llparam.SetName(param.Name())
 		if isMethod && i == 0 {
 			if _, ok := param.Type().Underlying().(*types.Pointer); !ok {
 				llparam = fr.builder.CreateBitCast(llparam, llvm.PointerType(fr.types.ToLLVM(param.Type()), 0), "")
