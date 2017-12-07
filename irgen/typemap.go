@@ -53,6 +53,41 @@ type typeDescInfo struct {
 	interfaceMethodTables typeutil.Map
 }
 
+// NOTE(growly): I've done a lot of butchering.
+// At the bottom, a new FIFO type represents the (hopefully opaque) struct that
+// LegUp/other external HLS tools will define. Channels are now a pointer to
+// this structure.
+//
+// Go creates meta types for each of the types available to the programmer to
+// enable various bookkeeping - array lengths, slice indices, channel
+// directions, etc. Mapping channels to a straight FIFO*, requires treating
+// channels as something other than the 'common type', for which all metadata
+// seems to be the same. Composite types rely on the homogeneity of a 'common
+// type' for simplification - e.g., a function signature takes a slice of
+// inputs types, which all have the same desriptor type, and returns another
+// such slice.
+
+// Aggregate types have thus been extended to structs instead of slices in a
+// few places, to make sure that the variety of different constituent types can
+// be expressed. This implies that somewhere else, functions to operate on
+// these types (builtins, those in the go libraries) have to be aware of the
+// differences in the metadata structures and to operate accordingly.
+// Concretely, for example, slices of types will no longer have a 'length'
+// parameter, instead the struct will be of different size.
+//
+// On top of that, LLVM seems to treat two identically-defined types with
+// different names as different types, so we have to make sure we define each
+// type only once. So we store them in a map once they're created, keyed by
+// some description of the types they require.
+//
+// types.Signature:
+//		Params and Results are now a struct with one field per entry and a
+//		starting int field with the total number.
+//
+// types.Struct:
+//		Instead of a slice to store type information for all fields, a struct of
+//		different type descriptors is now used, with a preceding length field.
+
 type TypeMap struct {
 	*llvmTypeMap
 	mc manglerContext
@@ -64,13 +99,27 @@ type TypeMap struct {
 	methodResolver MethodResolver
 	types.MethodSetCache
 
-	commonTypeType, uncommonTypeType, ptrTypeType, funcTypeType, interfaceTypeType, structChanFieldType, structTypeType llvm.Type
+	commonTypeType, uncommonTypeType, ptrTypeType,  interfaceTypeType, structChanFieldType llvm.Type
+	//, structTypeType llvm.Type
+
+	// funcTypeType llvm.Type
 
 	commonTypeTypePtr llvm.Type
 	arrayTypeType, arrayOfChanTypeType, sliceTypeType, sliceOfChanTypeType *llvm.Type
+
 	// mapTypeType is now entirely stored in the mapTypeMap. mapTypeMap is a map
 	// of keys (based on element types) to the type descriptor.
 	mapTypeMap map[string]*llvm.Type
+
+	// Likewise, sliceTypeType is now obsoleted by the types stored in the
+	// funcTypeMap
+	// sliceTypeType *llvm.Type
+	funcTypeMap map[types.Signature]*llvm.Type
+	funcTypeNumber int
+
+	// Same for struct types, which assume a uniform 'commonPtr' descriptor and
+	// store them in slices.
+	structTypeMap map[string]*llvm.Type
 
 	// chanTypeType llvm.Type
 
@@ -82,7 +131,9 @@ type TypeMap struct {
 
 	methodType, imethodType, structFieldType llvm.Type
 
-	methodSliceType, imethodSliceType, structFieldSliceType llvm.Type
+	methodSliceType, imethodSliceType llvm.Type
+	//structFieldSliceType llvm.Type
+	structFieldStructType llvm.Type
 
 	funcValType             llvm.Type
 	hashFnType, equalFnType llvm.Type
@@ -220,7 +271,7 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 		tm.commonTypeTypePtr,                        // ptrToThis
 	}, false)
 
-	tm.typeSliceType = tm.makeNamedSliceType("typeSlice", tm.commonTypeTypePtr)
+	//tm.typeSliceType = tm.makeNamedSliceType("typeSlice", tm.commonTypeTypePtr)
 
 	tm.ptrTypeType = tm.ctx.StructCreateNamed("ptrType")
 	tm.ptrTypeType.StructSetBody([]llvm.Type{
@@ -228,13 +279,15 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 		tm.commonTypeTypePtr,
 	}, false)
 
-	tm.funcTypeType = tm.ctx.StructCreateNamed("funcType")
-	tm.funcTypeType.StructSetBody([]llvm.Type{
-		tm.commonTypeType,
-		tm.ctx.Int8Type(), // dotdotdot
-		tm.typeSliceType,  // in
-		tm.typeSliceType,  // out
-	}, false)
+	tm.funcTypeMap = make(map[types.Signature]*llvm.Type)
+	tm.funcTypeNumber = 0
+	//tm.funcTypeType = tm.ctx.StructCreateNamed("funcType")
+	//tm.funcTypeType.StructSetBody([]llvm.Type{
+	//	tm.commonTypeType,
+	//	tm.ctx.Int8Type(), // dotdotdot
+	//	tm.typeSliceType,  // in
+	//	tm.typeSliceType,  // out
+	//}, false)
 
 	// The default should be interpreted as arrayTypeType when no entry exists.
 	tm.arrayTypeType = tm.createArrayTypeType("arrayType", tm.commonTypeTypePtr)
@@ -287,13 +340,14 @@ func NewTypeMap(pkg *ssa.Package, llvmtm *llvmTypeMap, module llvm.Module, r *ru
 		tm.inttype,        // offset
 	}, false)
 
-	tm.structFieldSliceType = tm.makeNamedSliceType("structFieldSlice", tm.structFieldType)
+	tm.structTypeMap = make(map[string]*llvm.Type)
+	//tm.structFieldSliceType = tm.makeNamedSliceType("structFieldSlice", tm.structFieldType)
 
-	tm.structTypeType = tm.ctx.StructCreateNamed("structType")
-	tm.structTypeType.StructSetBody([]llvm.Type{
-		tm.commonTypeType,
-		tm.structFieldSliceType, // fields
-	}, false)
+	//tm.structTypeType = tm.ctx.StructCreateNamed("structType")
+	//tm.structTypeType.StructSetBody([]llvm.Type{
+	//	tm.commonTypeType,
+	//	tm.structFieldSliceType, // fields
+	//}, false)
 
 	tm.mapDescType = tm.ctx.StructCreateNamed("mapDesc")
 	tm.mapDescType.StructSetBody([]llvm.Type{
@@ -324,6 +378,100 @@ func (tm *TypeMap) createSliceTypeType(s string, e llvm.Type) *llvm.Type {
 		e,
 	}, false)
 	return &sliceType
+}
+
+func (tm *TypeMap) getStructTypeTypeName(s *types.Struct) string {
+	m := "structType"
+
+	for i := 0; i < s.NumFields(); i++ {
+		if _, ok := s.Field(i).Type().(*types.Chan); ok {
+			m += fmt.Sprintf("__%d_chan", i)
+		} else {
+			m += fmt.Sprintf("__%d_c", i)
+		}
+	}
+
+	return m
+}
+
+func (tm *TypeMap) getStructTypeType(s *types.Struct) *llvm.Type {
+	m := tm.getStructTypeTypeName(s)
+	if x, ok := tm.structTypeMap[m]; ok {
+		return x
+	}
+
+	// Instead of a slice of all one kind of structFieldType or
+	// structChanFieldType, we're building a struct that can mix the two.
+	fieldTypes := make([]llvm.Type, s.NumFields() + 2)
+	fieldTypes[0] = tm.commonTypeType
+	fieldTypes[1] = tm.inttype		// length
+	for i := 0; i < s.NumFields(); i++ {
+		j := i + 2
+		field := s.Field(i)
+		switch field.Type().(type) {
+		case *types.Chan:
+			fieldTypes[j] = tm.structChanFieldType
+		default:
+			fieldTypes[j] = tm.structFieldType
+		}
+	}
+
+	structTypeType := tm.ctx.StructCreateNamed(m)
+	structTypeType.StructSetBody(fieldTypes, false)
+	tm.structTypeMap[m] = &structTypeType
+	return &structTypeType
+}
+
+func (tm *TypeMap) getTypeStruct(s string, elements []types.Type) *llvm.Type {
+	var t []llvm.Type
+	t = append(t, tm.inttype)	// The length field.
+	for _, e := range(elements) {
+		switch e.(type) {
+		case *types.Chan:
+			t = append(t, tm.chanTypeTypePtr)
+		default:
+			t = append(t, tm.commonTypeTypePtr)
+		}
+	}
+
+	x := tm.ctx.StructCreateNamed(s)
+	x.StructSetBody(t, false)
+	return &x
+}
+
+func (tm *TypeMap) getParamStruct(s string, tuple *types.Tuple) *llvm.Type {
+	elements := make([]types.Type, tuple.Len())	
+	for i := 0; i < tuple.Len(); i++ {
+		elements[i] = tuple.At(i).Type()
+	}
+	return tm.getTypeStruct(s, elements)
+}
+
+func (tm *TypeMap) getFuncTypeType(f *types.Signature) *llvm.Type {
+	if t, ok := tm.funcTypeMap[*f]; ok {
+		return t
+	}
+
+	funcTypeName := fmt.Sprintf("funcType_%d", tm.funcTypeNumber)
+
+	// Input type.
+	inName := funcTypeName + "_in"
+	inStructType := tm.getParamStruct(inName, f.Params())
+
+	// Repeat for out.
+	outName := funcTypeName + "_out"
+	outStructType := tm.getParamStruct(outName, f.Results())
+
+	funcType := tm.ctx.StructCreateNamed(funcTypeName)
+	funcType.StructSetBody([]llvm.Type{
+		tm.commonTypeType,
+		tm.ctx.Int8Type(),	// dotdotdot
+		*inStructType,
+		*outStructType,
+	}, false)
+
+	tm.funcTypeMap[*f] = &funcType
+	return &funcType
 }
 
 func (tm *TypeMap) getMapTypeName(m *types.Map) string {
@@ -1098,7 +1246,7 @@ func (tm *TypeMap) getTypeDescType(t types.Type) llvm.Type {
 	case *types.Pointer:
 		return tm.ptrTypeType
 	case *types.Signature:
-		return tm.funcTypeType
+		return *tm.getFuncTypeType(v)
 	case *types.Array:
 		if _, ok := v.Elem().(*types.Chan); ok {
 			return *tm.arrayOfChanTypeType
@@ -1114,7 +1262,8 @@ func (tm *TypeMap) getTypeDescType(t types.Type) llvm.Type {
 	case *types.Chan:
 		return tm.chanTypeType
 	case *types.Struct:
-		return tm.structTypeType
+		return *tm.getStructTypeType(v)
+		//return tm.structTypeType
 	case *types.Interface:
 		return tm.interfaceTypeType
 	default:
@@ -1888,7 +2037,6 @@ func (tm *TypeMap) makeSliceType(t types.Type, s *types.Slice) llvm.Value {
 	fmt.Println("makeSliveType t", t.String(), "s.Elem()", s.Elem().String())
 	var vals [2]llvm.Value
 	vals[0] = tm.makeCommonType(t)
-
 	vals[1] = tm.getTypeDescriptorPointer(s.Elem())
 	fmt.Println("vals[1] type", vals[1].Type())
 
@@ -1904,13 +2052,17 @@ func (tm *TypeMap) makeSliceType(t types.Type, s *types.Slice) llvm.Value {
 }
 
 func (tm *TypeMap) makeStructType(t types.Type, s *types.Struct) llvm.Value {
-	var vals [2]llvm.Value
-	vals[0] = tm.makeCommonType(t)
+	var vals []llvm.Value
+	vals = append(vals, tm.makeCommonType(t))
 
 	fieldVars := make([]*types.Var, s.NumFields())
 	for i := range fieldVars {
 		fieldVars[i] = s.Field(i)
 	}
+
+	// Store the number of fields in the structure.
+	vals = append(vals, llvm.ConstInt(tm.inttype, uint64(len(fieldVars)), false))
+
 	offsets := tm.Offsetsof(fieldVars)
 	structFields := make([]llvm.Value, len(fieldVars))
 	for i, field := range fieldVars {
@@ -1925,7 +2077,12 @@ func (tm *TypeMap) makeStructType(t types.Type, s *types.Struct) llvm.Value {
 		} else {
 			sfvals[1] = llvm.ConstPointerNull(llvm.PointerType(tm.stringType, 0))
 		}
+
+		// This should be of type tm.chanTypeTypePtr or tm.commonTypeTypePtr
+		// depending on whether this field is a tm.structChanFieldType or a
+		// tm.structFieldType (below).
 		sfvals[2] = tm.getTypeDescriptorPointer(field.Type())
+
 		if tag := s.Tag(i); tag != "" {
 			sfvals[3] = tm.globalStringPtr(tag)
 		} else {
@@ -1939,9 +2096,13 @@ func (tm *TypeMap) makeStructType(t types.Type, s *types.Struct) llvm.Value {
 			structFields[i] = llvm.ConstNamedStruct(tm.structFieldType, sfvals[:])
 		}
 	}
-	vals[1] = tm.makeSlice(structFields, tm.structFieldSliceType)
+	for _, field := range structFields {
+		vals = append(vals, field)
+	}
 
-	return llvm.ConstNamedStruct(tm.structTypeType, vals[:])
+	structTypeType := tm.getStructTypeType(s)
+
+	return llvm.ConstNamedStruct(*structTypeType, vals[:])
 }
 
 func (tm *TypeMap) makePointerType(t types.Type, p *types.Pointer) llvm.Value {
@@ -1952,18 +2113,24 @@ func (tm *TypeMap) makePointerType(t types.Type, p *types.Pointer) llvm.Value {
 	return llvm.ConstNamedStruct(tm.ptrTypeType, vals[:])
 }
 
-func (tm *TypeMap) rtypeSlice(t *types.Tuple) llvm.Value {
-	rtypes := make([]llvm.Value, t.Len())
-	for i := range rtypes {
+func (tm *TypeMap) rtypeStruct(structtype llvm.Type, t *types.Tuple) llvm.Value {
+	n := t.Len()
+	rtypes := make([]llvm.Value, n + 1)
+	rtypes[0] = llvm.ConstInt(tm.inttype, uint64(n), false)
+	for i := 0; i < n; i++ {
+		j := i + 1	// Offset into rtypes
 		fmt.Printf("type %d is %s\n", i, t.At(i).Type())
-		rtypes[i] = tm.getTypeDescriptorPointer(t.At(i).Type())
+		rtypes[j] = tm.getTypeDescriptorPointer(t.At(i).Type())
 		//fmt.Println("rtypes[", i, "]", rtypes[i].String())
 	}
 	// badness
-	return tm.makeSlice(rtypes, tm.typeSliceType)
+	//return tm.makeSlice(rtypes, tm.typeSliceType)
+	return llvm.ConstNamedStruct(structtype, rtypes)
 }
 
 func (tm *TypeMap) makeFuncType(t types.Type, f *types.Signature) llvm.Value {
+	funcTypeType := tm.getFuncTypeType(f)
+
 	var vals [4]llvm.Value
 	vals[0] = tm.makeCommonType(t)
 	// dotdotdot
@@ -1973,11 +2140,15 @@ func (tm *TypeMap) makeFuncType(t types.Type, f *types.Signature) llvm.Value {
 	}
 	vals[1] = llvm.ConstInt(llvm.Int8Type(), uint64(variadic), false)
 	// in
-	vals[2] = tm.rtypeSlice(f.Params())
+	vals[2] = tm.rtypeStruct(funcTypeType.StructElementTypes()[2], f.Params())
 	// out
-	vals[3] = tm.rtypeSlice(f.Results())
+	vals[3] = tm.rtypeStruct(funcTypeType.StructElementTypes()[3], f.Results())
 
-	return llvm.ConstNamedStruct(tm.funcTypeType, vals[:])
+	// rtypeStruct would fill in each entry with the TypeDescriptorPoiter it had
+	// - it was assumed that these would all have the same type, hence they're
+	// in a slice.
+
+	return llvm.ConstNamedStruct(*funcTypeType, vals[:])
 }
 
 func (tm *TypeMap) makeInterfaceType(t types.Type, i *types.Interface) llvm.Value {
