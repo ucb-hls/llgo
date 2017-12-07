@@ -319,11 +319,11 @@ func (u *unit) defineFunction(f *ssa.Function) {
 	isMethod := f.Signature.Recv() != nil
 
 	// Methods cannot be referred to via a descriptor.
-	//	if !isMethod {
-	//		llfd := u.resolveFunctionDescriptorGlobal(f)
-	//		llfd.SetInitializer(llvm.ConstBitCast(llfn, llvm.PointerType(llvm.Int8Type(), 0)))
-	//		llfd.SetLinkage(linkage)
-	//	}
+//	if !isMethod {
+//		llfd := u.resolveFunctionDescriptorGlobal(f)
+//		llfd.SetInitializer(llvm.ConstBitCast(llfn, llvm.PointerType(llvm.Int8Type(), 0)))
+//		llfd.SetLinkage(linkage)
+//	}
 
 	// We only need to emit a descriptor for functions without bodies.
 	if len(f.Blocks) == 0 {
@@ -408,7 +408,7 @@ func (u *unit) defineFunction(f *ssa.Function) {
 	for _, local := range f.Locals {
 		typ := fr.llvmtypes.ToLLVM(deref(local.Type()))
 		alloca := fr.builder.CreateAlloca(typ, local.Comment)
-		//fr.memsetZero(alloca, llvm.SizeOf(typ))
+		fr.memsetZero(alloca, llvm.SizeOf(typ))
 		bcalloca := fr.builder.CreateBitCast(alloca, llvm.PointerType(llvm.Int8Type(), 0), "")
 		value := newValue(bcalloca, local.Type())
 		fr.env[local] = value
@@ -887,7 +887,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 		var value llvm.Value
 		if !instr.Heap {
 			value = fr.env[instr].value
-			//fr.memsetZero(value, llvm.SizeOf(llvmtyp))
+			fr.memsetZero(value, llvm.SizeOf(llvmtyp))
 		} else if fr.isInit && fr.shouldStaticallyAllocate(instr) {
 			// If this is the init function and we think it may be beneficial,
 			// allocate memory statically in the object file rather than on the
@@ -1128,7 +1128,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 
 	case *ssa.MakeInterface:
 		// fr.ptr[instr.X] will be set if a pointer load was elided by canAvoidLoad
-		// JENNY comment out this part to remove interface
+		// JENNY comment out this part to remove interface 
 		if ptr, ok := fr.ptr[instr.X]; ok {
 			fr.env[instr] = fr.makeInterfaceFromPointer(ptr, instr.X.Type(), instr.Type())
 		} else {
