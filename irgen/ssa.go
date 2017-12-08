@@ -319,11 +319,11 @@ func (u *unit) defineFunction(f *ssa.Function) {
 	isMethod := f.Signature.Recv() != nil
 
 	// Methods cannot be referred to via a descriptor.
-//	if !isMethod {
-//		llfd := u.resolveFunctionDescriptorGlobal(f)
-//		llfd.SetInitializer(llvm.ConstBitCast(llfn, llvm.PointerType(llvm.Int8Type(), 0)))
-//		llfd.SetLinkage(linkage)
-//	}
+	//	if !isMethod {
+	//		llfd := u.resolveFunctionDescriptorGlobal(f)
+	//		llfd.SetInitializer(llvm.ConstBitCast(llfn, llvm.PointerType(llvm.Int8Type(), 0)))
+	//		llfd.SetLinkage(linkage)
+	//	}
 
 	// We only need to emit a descriptor for functions without bodies.
 	if len(f.Blocks) == 0 {
@@ -523,17 +523,17 @@ func (fr *frame) emitInitPrologue() llvm.BasicBlock {
 
 	fr.builder.SetInsertPointAtEnd(initBlock)
 	fr.builder.CreateStore(llvm.ConstInt(llvm.Int1Type(), 1, false), initGuard)
-	int8ptr := llvm.PointerType(fr.types.ctx.Int8Type(), 0)
-	ftyp := llvm.FunctionType(llvm.VoidType(), []llvm.Type{int8ptr}, false)
-	for _, pkg := range fr.pkg.Object.Imports() {
-		initname := ManglePackagePath(pkg.Path()) + "..import"
-		initfn := fr.module.Module.NamedFunction(initname)
-		if initfn.IsNil() {
-			initfn = llvm.AddFunction(fr.module.Module, initname, ftyp)
-		}
-		args := []llvm.Value{llvm.Undef(int8ptr)}
-		fr.builder.CreateCall(initfn, args, "")
-	}
+	//	int8ptr := llvm.PointerType(fr.types.ctx.Int8Type(), 0)
+	//	ftyp := llvm.FunctionType(llvm.VoidType(), []llvm.Type{int8ptr}, false)
+	//	for _, pkg := range fr.pkg.Object.Imports() {
+	//		initname := ManglePackagePath(pkg.Path()) + "..import"
+	//		initfn := fr.module.Module.NamedFunction(initname)
+	//		if initfn.IsNil() {
+	//			initfn = llvm.AddFunction(fr.module.Module, initname, ftyp)
+	//		}
+	//		args := []llvm.Value{llvm.Undef(int8ptr)}
+	//		fr.builder.CreateCall(initfn, args, "")
+	//	}
 
 	return initBlock
 }
@@ -598,7 +598,7 @@ func (fr *frame) registerGcRoots() {
 		rootsglobal := llvm.AddGlobal(fr.module.Module, rootsstruct.Type(), "")
 		rootsglobal.SetInitializer(rootsstruct)
 		rootsglobal.SetLinkage(llvm.InternalLinkage)
-		fr.runtime.registerGcRoots.callOnly(fr, llvm.ConstBitCast(rootsglobal, llvm.PointerType(llvm.Int8Type(), 0)))
+		//fr.runtime.registerGcRoots.callOnly(fr, llvm.ConstBitCast(rootsglobal, llvm.PointerType(llvm.Int8Type(), 0)))
 	}
 }
 
@@ -1128,7 +1128,7 @@ func (fr *frame) instruction(instr ssa.Instruction) {
 
 	case *ssa.MakeInterface:
 		// fr.ptr[instr.X] will be set if a pointer load was elided by canAvoidLoad
-		// JENNY comment out this part to remove interface 
+		// JENNY comment out this part to remove interface
 		if ptr, ok := fr.ptr[instr.X]; ok {
 			fr.env[instr] = fr.makeInterfaceFromPointer(ptr, instr.X.Type(), instr.Type())
 		} else {
