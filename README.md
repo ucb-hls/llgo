@@ -76,3 +76,6 @@ In llgo, add:
 fr.module.Module.Dump()
 fn.Dump()
 
+### Go IDE
+GoLand https://www.jetbrains.com/go/
+
